@@ -345,7 +345,7 @@ function computeYearly(records: DailyRecord[]): PeriodSummary[] {
 }
 
 
-const PORT = 3000;
+const PORT = Number(process.env.PORT) || 3000;
 
 const server = http.createServer((req, res) => {
   const url = req.url || "/";
