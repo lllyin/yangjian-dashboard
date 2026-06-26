@@ -1,0 +1,11 @@
+{
+  "startWeek": "2026-W20",
+  "theme": {
+    "upColor": "#ef4444",
+    "upGlow": "rgba(239, 68, 68, 0.15)",
+    "upTextGlow": "0 0 10px rgba(239, 68, 68, 0.4)",
+    "downColor": "#10b981",
+    "downGlow": "rgba(16, 185, 129, 0.15)",
+    "downTextGlow": "0 0 10px rgba(16, 185, 129, 0.4)"
+  }
+}

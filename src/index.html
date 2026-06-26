@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>杨戬收益率监控仪表盘</title>
+  <!-- Outfit Google Font -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Outfit', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+  <link rel="stylesheet" href="style.css">
+  <!-- Chart.js via CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="min-h-screen text-gray-100 font-sans">
+  <div class="max-w-7xl mx-auto px-4 py-8 flex flex-col gap-8">
+    <header class="flex flex-col sm:flex-row justify-between items-center gap-6 border-b border-gray-800 pb-6">
+      <div class="flex items-center gap-4">
+        <span class="logo-icon text-4xl">👁️</span>
+        <div class="logo-text">
+          <h1 class="text-3xl font-bold tracking-wider bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">YANGJIAN</h1>
+          <p class="text-xs text-gray-400">AI 驱动的收益监控仪表盘</p>
+        </div>
+      </div>
+      <div class="segment-control flex bg-gray-900/40 p-1 rounded-full border border-gray-800">
+        <button class="segment-btn active" data-period="weekly">周收益</button>
+        <button class="segment-btn" data-period="monthly">月收益</button>
+        <button class="segment-btn" data-period="yearly">年收益</button>
+      </div>
+    </header>
+
+    <main class="flex flex-col gap-6">
+      <!-- Selector for Period Instance -->
+      <section class="control-panel glass-card flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div class="selector-container flex items-center gap-4 w-full md:w-auto">
+          <label for="period-selector" class="text-gray-400 font-medium whitespace-nowrap">选择查看周期：</label>
+          <select id="period-selector" class="custom-select w-full md:w-auto">
+            <!-- Dynamically populated -->
+          </select>
+        </div>
+        <div class="period-details w-full md:w-auto text-left md:text-right">
+          <span id="period-date-range" class="date-badge">-</span>
+        </div>
+      </section>
+
+      <!-- Key Performance Indicators -->
+      <section class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div class="kpi-card glass-card clickable flex items-center gap-5" id="kpi-pnl-card">
+          <div class="card-icon">💰</div>
+          <div class="card-info">
+            <h3 class="text-xs text-gray-400 font-medium uppercase tracking-wider mb-1">区间盈亏</h3>
+            <div class="value positive text-2xl font-bold" id="kpi-pnl">+0.00 元</div>
+          </div>
+        </div>
+
+        <div class="kpi-card glass-card clickable flex items-center gap-5" id="kpi-rate-card">
+          <div class="card-icon">📈</div>
+          <div class="card-info">
+            <h3 class="text-xs text-gray-400 font-medium uppercase tracking-wider mb-1">收益率</h3>
+            <div class="value positive text-2xl font-bold" id="kpi-rate">+0.00%</div>
+          </div>
+        </div>
+
+        <div class="kpi-card glass-card flex items-center gap-5">
+          <div class="card-icon">🏦</div>
+          <div class="card-info">
+            <h3 class="text-xs text-gray-400 font-medium uppercase tracking-wider mb-1">期初资产 / 期末资产</h3>
+            <div class="double-value flex items-center gap-2 text-lg font-semibold">
+              <span id="kpi-basis-asset">0.00 元</span>
+              <span class="separator text-gray-500">→</span>
+              <span id="kpi-end-asset">0.00 元</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Chart Visualization -->
+      <section class="chart-section glass-card">
+        <div class="section-header flex justify-between items-center mb-6">
+          <h2 id="chart-header" class="text-lg font-semibold">📊 每日盈亏柱状图</h2>
+          <span class="glow-indicator">REAL-TIME DATA</span>
+        </div>
+        <div class="chart-container relative h-[250px] md:h-[350px] w-full">
+          <canvas id="returns-chart"></canvas>
+        </div>
+      </section>
+
+      <!-- Detailed Day Listing -->
+      <section class="details-section glass-card">
+        <div class="section-header mb-4">
+          <h2 id="details-header" class="text-lg font-semibold">📅 日度收益明细</h2>
+        </div>
+        <div class="table-wrapper overflow-x-auto">
+          <table class="details-table w-full border-collapse text-left text-sm">
+            <thead>
+              <tr class="border-b border-gray-800">
+                <th id="th-date" class="py-3 px-4 text-gray-400 font-medium uppercase tracking-wider text-xs">日期</th>
+                <th id="th-asset" class="py-3 px-4 text-gray-400 font-medium uppercase tracking-wider text-xs">收盘总资产</th>
+                <th id="th-pnl" class="py-3 px-4 text-gray-400 font-medium uppercase tracking-wider text-xs">日内盈亏</th>
+                <th id="th-rate" class="py-3 px-4 text-gray-400 font-medium uppercase tracking-wider text-xs">日内收益率</th>
+                <th class="py-3 px-4 text-gray-400 font-medium uppercase tracking-wider text-xs">盈亏表现</th>
+              </tr>
+            </thead>
+            <tbody id="details-tbody">
+              <!-- Dynamically populated -->
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <footer class="main-footer text-center py-6 text-xs text-gray-500 border-t border-gray-800">
+      <p>&copy; 2026 Yangjian Trading System. All rights reserved. Data parsed automatically from local workspace.</p>
+    </footer>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

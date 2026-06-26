@@ -1,0 +1,17 @@
+{
+  "name": "yangjian-dashboard",
+  "version": "1.0.0",
+  "description": "杨戬收益率监控仪表盘 (独立运行版)",
+  "main": "dist/src/server.js",
+  "scripts": {
+    "build": "tsc",
+    "dashboard": "npm run build && node --env-file=.env dist/src/server.js"
+  },
+  "dependencies": {
+    "@types/node": "^25.6.0",
+    "typescript": "^6.0.3",
+    "yaml": "^2.8.3",
+    "yangjian": "file:../yangjian",
+    "zod": "^4.3.6"
+  }
+}
