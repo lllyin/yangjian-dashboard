@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import http from "node:http";
-import { calculateAccountReturns } from "yangjian/calculation";
+import { calculateAccountReturns, parseTradesMarkdown, type ParsedTrade } from "yangjian/calculation";
 
 interface Config {
   startWeek?: string;
@@ -33,6 +33,15 @@ interface DailyRecord {
   pnlRate: number;
 }
 
+interface TradeRecord {
+  date: string; // YYYYMMDD
+  tradeNo: number;
+  action: "买入" | "卖出";
+  symbol: string;
+  name: string;
+  price: number;
+}
+
 interface PeriodSummary {
   label: string; // e.g. "2026-W26", "2026-06", "2026"
   pnl: number;
@@ -40,6 +49,7 @@ interface PeriodSummary {
   basisAsset: number;
   endAsset: number;
   days: DailyRecord[];
+  trades?: TradeRecord[]; // Only for weekly summaries
 }
 
 // Helper to load configurations
@@ -64,6 +74,58 @@ function parseTableMoney(content: string, label: string): number | null {
   const pattern = new RegExp(`^\\|\\s*${escaped}\\s*\\|\\s*([^|]+?)\\s*\\|`, "m");
   const raw = content.match(pattern)?.[1];
   return raw ? parseMoney(raw) : null;
+}
+
+// Parse trades from trades/*.md files for a given week
+function parseTradesForWeek(yangjianRoot: string, weekName: string): TradeRecord[] {
+  const tradesDir = path.join(yangjianRoot, "trades");
+  if (!fs.existsSync(tradesDir)) {
+    return [];
+  }
+
+  // Get date range for this week from journal directory
+  const weekDir = path.join(yangjianRoot, "journal", weekName);
+  if (!fs.existsSync(weekDir)) {
+    return [];
+  }
+
+  const dateNames = fs.readdirSync(weekDir).filter((name) => {
+    return /^\d{8}$/.test(name) && fs.statSync(path.join(weekDir, name)).isDirectory();
+  });
+
+  const trades: TradeRecord[] = [];
+
+  for (const dateName of dateNames) {
+    const tradesFilePath = path.join(tradesDir, `${dateName}.md`);
+    if (!fs.existsSync(tradesFilePath)) {
+      continue;
+    }
+
+    try {
+      const content = fs.readFileSync(tradesFilePath, "utf8");
+      const parsedTrades = parseTradesMarkdown(content);
+      
+      for (const trade of parsedTrades) {
+        trades.push({
+          date: dateName,
+          tradeNo: trade.tradeNo,
+          action: trade.action,
+          symbol: trade.symbol,
+          name: trade.name,
+          price: trade.tradePrice,
+        });
+      }
+    } catch (e) {
+      // Ignore parsing errors
+      console.error(`Error parsing trades for ${dateName}:`, e);
+    }
+  }
+
+  // Sort by date and trade number
+  return trades.sort((a, b) => {
+    const dateCmp = a.date.localeCompare(b.date);
+    return dateCmp !== 0 ? dateCmp : a.tradeNo - b.tradeNo;
+  });
 }
 
 // Core parsing logic
@@ -213,6 +275,9 @@ function computeWeekly(records: DailyRecord[]): PeriodSummary[] {
       pnlRate = basisAsset === 0 ? 0 : pnl / basisAsset;
     }
 
+    // Parse trades for this week
+    const trades = parseTradesForWeek(resolveYangjianRoot(), weekName);
+
     summaries.push({
       label: weekName,
       pnl: Math.round(pnl * 100) / 100,
@@ -220,6 +285,7 @@ function computeWeekly(records: DailyRecord[]): PeriodSummary[] {
       basisAsset: Math.round(basisAsset * 100) / 100,
       endAsset: Math.round(endAsset * 100) / 100,
       days,
+      trades,
     });
   }
 

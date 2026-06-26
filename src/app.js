@@ -12,6 +12,8 @@ const kpiRate = document.getElementById("kpi-rate");
 const kpiBasisAsset = document.getElementById("kpi-basis-asset");
 const kpiEndAsset = document.getElementById("kpi-end-asset");
 const detailsTbody = document.getElementById("details-tbody");
+const tradesSection = document.getElementById("trades-section");
+const tradesContainer = document.getElementById("trades-container");
 
 // Initialize application
 document.addEventListener("DOMContentLoaded", () => {
@@ -109,6 +111,8 @@ function clearDisplay() {
   kpiBasisAsset.textContent = "0.00 元";
   kpiEndAsset.textContent = "0.00 元";
   detailsTbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-muted);">暂无明细数据</td></tr>`;
+  tradesSection.style.display = "none";
+  tradesContainer.innerHTML = "";
   if (chartInstance) {
     chartInstance.destroy();
     chartInstance = null;
@@ -216,6 +220,80 @@ function displaySelectedPeriod() {
       `;
       detailsTbody.appendChild(tr);
     });
+  }
+
+  // 5. Render trades (only for weekly view)
+  if (activePeriod === "weekly" && item.trades && item.trades.length > 0) {
+    tradesSection.style.display = "block";
+    tradesContainer.innerHTML = "";
+    
+    // Group trades by date
+    const tradesByDate = {};
+    item.trades.forEach((trade) => {
+      if (!tradesByDate[trade.date]) {
+        tradesByDate[trade.date] = [];
+      }
+      tradesByDate[trade.date].push(trade);
+    });
+    
+    // Get dates in reverse chronological order
+    const dates = Object.keys(tradesByDate).sort().reverse();
+    
+    dates.forEach((date) => {
+      const trades = tradesByDate[date];
+      const displayDate = formatYmd(date);
+      
+      // Create date card
+      const dateCard = document.createElement("div");
+      dateCard.className = "trade-date-card";
+      
+      // Date header
+      const dateHeader = document.createElement("div");
+      dateHeader.className = "trade-date-header";
+      dateHeader.innerHTML = `
+        <div class="trade-date-label">
+          <span class="trade-date-icon">📅</span>
+          <span class="trade-date-text">${displayDate}</span>
+        </div>
+        <span class="trade-count-badge">${trades.length} 笔交易</span>
+      `;
+      dateCard.appendChild(dateHeader);
+      
+      // Trade items
+      const tradesList = document.createElement("div");
+      tradesList.className = "trades-list";
+      
+      trades.forEach((trade, index) => {
+        const tradeItem = document.createElement("div");
+        tradeItem.className = "trade-item";
+        
+        const actionPill = trade.action === "买入" 
+          ? '<span class="action-pill buy">买入</span>' 
+          : '<span class="action-pill sell">卖出</span>';
+        
+        const displaySymbol = `${trade.name} (${trade.symbol})`;
+        const displayPrice = formatMoney(trade.price);
+        const priceClass = trade.action === "买入" ? "trade-buy" : "trade-sell";
+        
+        tradeItem.innerHTML = `
+          <div class="trade-item-number">#${trade.tradeNo}</div>
+          <div class="trade-item-content">
+            <div class="trade-item-main">
+              <div class="trade-item-symbol">${displaySymbol}</div>
+              <div class="trade-item-price ${priceClass}">${displayPrice}</div>
+            </div>
+            <div class="trade-item-action">${actionPill}</div>
+          </div>
+        `;
+        
+        tradesList.appendChild(tradeItem);
+      });
+      
+      dateCard.appendChild(tradesList);
+      tradesContainer.appendChild(dateCard);
+    });
+  } else {
+    tradesSection.style.display = "none";
   }
 }
 
