@@ -31,6 +31,7 @@ interface DailyRecord {
   totalAsset: number;
   pnl: number;
   pnlRate: number;
+  source: "snapshot" | "rebuilt" | "close"; // 数据来源标识
 }
 
 interface TradeRecord {
@@ -50,6 +51,7 @@ interface PeriodSummary {
   endAsset: number;
   days: DailyRecord[];
   trades?: TradeRecord[]; // Only for weekly summaries
+  hasRebuiltData?: boolean; // 区间内是否包含 rebuilt 重建数据
 }
 
 // Helper to load configurations
@@ -160,17 +162,23 @@ function scanJournalData(yangjianRoot: string): DailyRecord[] {
     for (const dateName of dateNames) {
       const dayDir = path.join(weekDir, dateName);
       const snapshotPath = path.join(dayDir, "account-snapshots.json");
+      const rebuiltPath = path.join(dayDir, "account-snapshots.rebuilt.json");
       const closePath = path.join(dayDir, "close.md");
 
       let totalAsset = 0;
       let pnl = 0;
       let pnlRate = 0;
       let parsedSuccessfully = false;
+      let source: DailyRecord["source"] = "close";
 
-      // 1. Try account-snapshots.json first
-      if (fs.existsSync(snapshotPath)) {
+      // 1. Try account-snapshots.json first, then fall back to rebuilt.json
+      const snapshotFile = fs.existsSync(snapshotPath)
+        ? snapshotPath
+        : fs.existsSync(rebuiltPath) ? rebuiltPath : null;
+      if (snapshotFile) {
+        source = snapshotFile === snapshotPath ? "snapshot" : "rebuilt";
         try {
-          const snapshot = JSON.parse(fs.readFileSync(snapshotPath, "utf8"));
+          const snapshot = JSON.parse(fs.readFileSync(snapshotFile, "utf8"));
           const prevClose = snapshot.prevCloseTotalAsset ?? 0;
           const sessions = Array.isArray(snapshot.sessions) ? snapshot.sessions : [];
           
@@ -221,6 +229,7 @@ function scanJournalData(yangjianRoot: string): DailyRecord[] {
           totalAsset: Math.round(totalAsset * 100) / 100,
           pnl: Math.round(pnl * 100) / 100,
           pnlRate: Math.round(pnlRate * 10000) / 10000,
+          source,
         });
       }
     }
@@ -286,6 +295,7 @@ function computeWeekly(records: DailyRecord[]): PeriodSummary[] {
       endAsset: Math.round(endAsset * 100) / 100,
       days,
       trades,
+      hasRebuiltData: days.some((d) => d.source === "rebuilt"),
     });
   }
 
@@ -345,6 +355,7 @@ function computeMonthly(records: DailyRecord[]): PeriodSummary[] {
       basisAsset: Math.round(basisAsset * 100) / 100,
       endAsset: Math.round(endAsset * 100) / 100,
       days,
+      hasRebuiltData: days.some((d) => d.source === "rebuilt"),
     });
   }
 
@@ -404,6 +415,7 @@ function computeYearly(records: DailyRecord[]): PeriodSummary[] {
       basisAsset: Math.round(basisAsset * 100) / 100,
       endAsset: Math.round(endAsset * 100) / 100,
       days,
+      hasRebuiltData: days.some((d) => d.source === "rebuilt"),
     });
   }
 
@@ -436,7 +448,8 @@ const server = http.createServer((req, res) => {
 
   // Static files hosting - serve from src/ directly
   const dashboardSourceDir = path.join(__dirname, "../../src");
-  let filePath = path.join(dashboardSourceDir, url === "/" ? "index.html" : url.slice(1));
+  const cleanUrl = url.split("?")[0];
+  let filePath = path.join(dashboardSourceDir, cleanUrl === "/" ? "index.html" : cleanUrl.slice(1));
 
   // Basic security check: prevent directory traversal
   if (!filePath.startsWith(dashboardSourceDir)) {
@@ -445,10 +458,19 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  fs.exists(filePath, (exists) => {
-    if (!exists) {
-      res.writeHead(404);
-      res.end("Not Found");
+ fs.exists(filePath, (exists) => {
+   if (!exists) {
+     res.writeHead(404);
+     res.end("Not Found");
+     return;
+   }
+
+    // 为 index.html 注入 app.js 时间戳，实现缓存破坏
+    if (filePath.endsWith("index.html")) {
+      const html = fs.readFileSync(filePath, "utf8");
+      const htmlWithHash = html.replace("app.js", `app.js?t=${Date.now()}`);
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+      res.end(htmlWithHash);
       return;
     }
 

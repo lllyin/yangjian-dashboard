@@ -143,8 +143,15 @@ function displaySelectedPeriod() {
     const start = formatYmd(item.days[0].date);
     const end = formatYmd(item.days[item.days.length - 1].date);
     periodDateRange.textContent = `${start} 至 ${end}`;
+    if (item.hasRebuiltData) {
+      periodDateRange.textContent += " · 含重建数据";
+      periodDateRange.title = "部分交易日数据来自 account-snapshots.rebuilt.json（历史快照重建）";
+    } else {
+      periodDateRange.title = "";
+    }
   } else {
     periodDateRange.textContent = "-";
+    periodDateRange.title = "";
   }
 
   // 3. Render Chart
