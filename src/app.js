@@ -42,8 +42,8 @@ async function fetchDashboardData() {
     // Render initially
     renderActivePeriodList();
   } catch (err) {
-    console.error("Error fetching data:", err);
-    alert("无法连接到本地数据服务器，请检查后端是否正常启动。");
+    console.error("数据渲染或解析失败，请检查返回的 JSON 格式和前端逻辑:", err);
+    alert(`前端渲染出错了: ${err.message}`);
   }
 }
 
