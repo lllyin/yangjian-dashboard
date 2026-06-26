@@ -4,6 +4,7 @@ dist/
 
 # 环境变量（含机器本地路径，不提交）
 .env
+yangjian.service
 
 # macOS
 .DS_Store

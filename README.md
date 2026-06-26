@@ -51,6 +51,28 @@ cd yangjian-dashboard
 npm run dashboard
 ```
 
+Ubuntu系统 systemd管理
+```bash
+vim /etc/systemd/system/yangjian.service
+
+# 参考 yangjian.service.example 配置service
+
+# 重新加载 Systemd 配置
+systemctl daemon-reload
+
+# 启动服务：
+systemctl start yangjian
+
+# 设置开机自启：
+systemctl enable yangjian
+
+# 停止服务
+systemctl stop yangjian
+
+# 检查运行状态：
+sudo systemctl status yangjian
+```
+
 打开浏览器访问：[http://localhost:3000](http://localhost:3000)
 
 ## 项目结构

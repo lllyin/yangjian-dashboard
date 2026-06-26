@@ -1,0 +1,28 @@
+[Unit]
+Description=Yangjian Dashboard Server
+After=network.target
+
+[Service]
+Type=simple
+User=root
+# 1. 你的项目绝对路径（请修改为你的实际目录，例如 /var/www/yangjian-dashboard）
+WorkingDirectory=/path/to/your/yangjian-dashboard
+
+# 2. 启动前先执行 build（可选。如果不需要每次重启都重新编译，可以删掉这行）
+ExecStartPre=/usr/bin/npm run build
+
+# 3. 核心启动命令
+# 请确保通过 `which node` 查看到的 node 路径与下面一致，通常是 /usr/bin/node 或 /usr/local/bin/node
+ExecStart=/usr/bin/node --env-file=.env dist/src/server.js
+
+# 如果程序崩溃，自动重启
+Restart=on-failure
+# 每次重启前等待 5 秒
+RestartSec=5s
+
+# 收集标准的错误和输出日志
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
