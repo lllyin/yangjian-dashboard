@@ -48,6 +48,7 @@ interface PeriodSummary {
   pnl: number;
   pnlRate: number;
   basisAsset: number;
+  netDeposits: number;
   endAsset: number;
   days: DailyRecord[];
   trades?: TradeRecord[]; // Only for weekly summaries
@@ -259,6 +260,7 @@ function computeWeekly(records: DailyRecord[]): PeriodSummary[] {
 
     let pnl = days.reduce((sum, d) => sum + d.pnl, 0);
     let basisAsset = 0;
+    let netDeposits = 0;
     let endAsset = 0;
     let pnlRate = 0;
 
@@ -272,6 +274,7 @@ function computeWeekly(records: DailyRecord[]): PeriodSummary[] {
       pnl = res.pnl;
       pnlRate = res.returnRate;
       basisAsset = res.basisAsset;
+      netDeposits = res.netDeposits ?? 0;
       endAsset = res.endAsset;
     } catch (e) {
       if (idx > 0) {
@@ -292,6 +295,7 @@ function computeWeekly(records: DailyRecord[]): PeriodSummary[] {
       pnl: Math.round(pnl * 100) / 100,
       pnlRate: Math.round(pnlRate * 10000) / 10000,
       basisAsset: Math.round(basisAsset * 100) / 100,
+      netDeposits: Math.round(netDeposits * 100) / 100,
       endAsset: Math.round(endAsset * 100) / 100,
       days,
       trades,
@@ -323,6 +327,7 @@ function computeMonthly(records: DailyRecord[]): PeriodSummary[] {
 
     let pnl = days.reduce((sum, d) => sum + d.pnl, 0);
     let basisAsset = 0;
+    let netDeposits = 0;
     let endAsset = 0;
     let pnlRate = 0;
 
@@ -336,6 +341,7 @@ function computeMonthly(records: DailyRecord[]): PeriodSummary[] {
       pnl = res.pnl;
       pnlRate = res.returnRate;
       basisAsset = res.basisAsset;
+      netDeposits = res.netDeposits ?? 0;
       endAsset = res.endAsset;
     } catch (e) {
       if (idx > 0) {
@@ -353,6 +359,7 @@ function computeMonthly(records: DailyRecord[]): PeriodSummary[] {
       pnl: Math.round(pnl * 100) / 100,
       pnlRate: Math.round(pnlRate * 10000) / 10000,
       basisAsset: Math.round(basisAsset * 100) / 100,
+      netDeposits: Math.round(netDeposits * 100) / 100,
       endAsset: Math.round(endAsset * 100) / 100,
       days,
       hasRebuiltData: days.some((d) => d.source === "rebuilt"),
@@ -383,6 +390,7 @@ function computeYearly(records: DailyRecord[]): PeriodSummary[] {
 
     let pnl = days.reduce((sum, d) => sum + d.pnl, 0);
     let basisAsset = 0;
+    let netDeposits = 0;
     let endAsset = 0;
     let pnlRate = 0;
 
@@ -396,6 +404,7 @@ function computeYearly(records: DailyRecord[]): PeriodSummary[] {
       pnl = res.pnl;
       pnlRate = res.returnRate;
       basisAsset = res.basisAsset;
+      netDeposits = res.netDeposits ?? 0;
       endAsset = res.endAsset;
     } catch (e) {
       if (idx > 0) {
@@ -413,6 +422,7 @@ function computeYearly(records: DailyRecord[]): PeriodSummary[] {
       pnl: Math.round(pnl * 100) / 100,
       pnlRate: Math.round(pnlRate * 10000) / 10000,
       basisAsset: Math.round(basisAsset * 100) / 100,
+      netDeposits: Math.round(netDeposits * 100) / 100,
       endAsset: Math.round(endAsset * 100) / 100,
       days,
       hasRebuiltData: days.some((d) => d.source === "rebuilt"),
