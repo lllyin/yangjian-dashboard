@@ -140,7 +140,12 @@ function displaySelectedPeriod() {
   kpiEndAsset.textContent = `${formatMoney(item.endAsset)} 元`;
 
   if (kpiNetDeposits) {
-    kpiNetDeposits.textContent = `${formatPnlSign(item.netDeposits ?? 0)} 元`;
+    const netDeposits = item.netDeposits ?? 0;
+    const netDepositsRow = document.getElementById("kpi-net-deposits-row");
+    if (netDepositsRow) {
+      netDepositsRow.style.display = netDeposits !== 0 ? "" : "none";
+    }
+    kpiNetDeposits.textContent = `${formatPnlSign(netDeposits)} 元`;
   }
 
   // 2. Update date ranges badge
