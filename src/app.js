@@ -11,6 +11,7 @@ const kpiPnl = document.getElementById("kpi-pnl");
 const kpiRate = document.getElementById("kpi-rate");
 const kpiBasisAsset = document.getElementById("kpi-basis-asset");
 const kpiEndAsset = document.getElementById("kpi-end-asset");
+const kpiNetDeposits = document.getElementById("kpi-net-deposits");
 const detailsTbody = document.getElementById("details-tbody");
 const tradesSection = document.getElementById("trades-section");
 const tradesContainer = document.getElementById("trades-container");
@@ -137,6 +138,10 @@ function displaySelectedPeriod() {
 
   kpiBasisAsset.textContent = `${formatMoney(item.basisAsset)} 元`;
   kpiEndAsset.textContent = `${formatMoney(item.endAsset)} 元`;
+
+  if (kpiNetDeposits) {
+    kpiNetDeposits.textContent = `${formatPnlSign(item.netDeposits ?? 0)} 元`;
+  }
 
   // 2. Update date ranges badge
   if (item.days && item.days.length > 0) {
