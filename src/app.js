@@ -26,15 +26,13 @@ document.addEventListener("DOMContentLoaded", () => {
 // Fetch data from local backend server
 async function fetchDashboardData() {
   try {
-    // URL hash 不会进入服务器访问日志，仅当前带正确 token 的页面显示交易价格。
-    const urlToken = new URLSearchParams(window.location.hash.slice(1)).get("token") || "";
-    const apiUrl = urlToken ? "/api/data" : "/api/public";
-    const requestOptions = urlToken
-      ? { headers: { "x-dashboard-token": urlToken } }
-      : undefined;
+    const authToken = new URLSearchParams(window.location.search).get("auth_token") || "";
+    const apiUrl = authToken
+      ? `/api/data?auth_token=${encodeURIComponent(authToken)}`
+      : "/api/public";
 
-    let response = await fetch(apiUrl, requestOptions);
-    if (response.status === 403 && urlToken) {
+    let response = await fetch(apiUrl);
+    if (response.status === 403 && authToken) {
       response = await fetch("/api/public");
     }
     apiData = await response.json();

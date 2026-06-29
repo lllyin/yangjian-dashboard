@@ -436,13 +436,13 @@ function computeYearly(records: DailyRecord[]): PeriodSummary[] {
 // ============================================================
 // 安全策略
 // - /api/public: 公开安全数据（保留交易明细，隐藏买入卖出价格）
-// - /api/data:   完整数据（含 trades），需 ?token=xxx 认证
+// - /api/data:   完整数据（含 trades），需 ?auth_token=xxx 认证
 // - 错误信息脱敏，不暴露内部路径
 // - 仅监听 127.0.0.1，由 Nginx 做访问控制
 // ============================================================
 
 const PORT = Number(process.env.PORT) || 3000;
-const DASHBOARD_TOKEN = process.env.DASHBOARD_TOKEN || "";
+const AUTH_TOKEN = process.env.AUTH_TOKEN || "";
 const HOST = process.env.DASHBOARD_HOST || "127.0.0.1";
 
 /** 从 PeriodSummary 数组中掩码 trades 的价格，保留交易明细 */
@@ -455,11 +455,10 @@ function maskTradePrices(periods: PeriodSummary[]): PeriodSummary[] {
 
 /** 检查请求是否持有有效 token */
 function isAuthorizedToken(req: http.IncomingMessage): boolean {
-  if (!DASHBOARD_TOKEN) return false;
+  if (!AUTH_TOKEN) return false;
   const url = new URL(req.url || "/", "http://localhost");
-  const tokenParam = url.searchParams.get("token") || "";
-  const tokenHeader = req.headers["x-dashboard-token"] || "";
-  return tokenParam === DASHBOARD_TOKEN || tokenHeader === DASHBOARD_TOKEN;
+  const tokenParam = url.searchParams.get("auth_token") || "";
+  return tokenParam === AUTH_TOKEN;
 }
 
 const server = http.createServer((req, res) => {
