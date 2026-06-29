@@ -26,7 +26,17 @@ document.addEventListener("DOMContentLoaded", () => {
 // Fetch data from local backend server
 async function fetchDashboardData() {
   try {
-    const response = await fetch("/api/data");
+    // URL hash 不会进入服务器访问日志，仅当前带正确 token 的页面显示交易价格。
+    const urlToken = new URLSearchParams(window.location.hash.slice(1)).get("token") || "";
+    const apiUrl = urlToken ? "/api/data" : "/api/public";
+    const requestOptions = urlToken
+      ? { headers: { "x-dashboard-token": urlToken } }
+      : undefined;
+
+    let response = await fetch(apiUrl, requestOptions);
+    if (response.status === 403 && urlToken) {
+      response = await fetch("/api/public");
+    }
     apiData = await response.json();
     if (apiData.error) {
       alert(`数据加载失败: ${apiData.error}`);
@@ -289,7 +299,7 @@ function displaySelectedPeriod() {
           : '<span class="action-pill sell">卖出</span>';
         
         const displaySymbol = `${trade.name} (${trade.symbol})`;
-        const displayPrice = formatMoney(trade.price);
+        const displayPrice = trade.price == null ? "" : formatMoney(trade.price);
         const priceClass = trade.action === "买入" ? "trade-buy" : "trade-sell";
         
         tradeItem.innerHTML = `

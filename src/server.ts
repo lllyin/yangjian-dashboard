@@ -40,7 +40,7 @@ interface TradeRecord {
   action: "买入" | "卖出";
   symbol: string;
   name: string;
-  price: number;
+  price: number | null;
 }
 
 interface PeriodSummary {
@@ -433,13 +433,64 @@ function computeYearly(records: DailyRecord[]): PeriodSummary[] {
 }
 
 
+// ============================================================
+// 安全策略
+// - /api/public: 公开安全数据（保留交易明细，隐藏买入卖出价格）
+// - /api/data:   完整数据（含 trades），需 ?token=xxx 认证
+// - 错误信息脱敏，不暴露内部路径
+// - 仅监听 127.0.0.1，由 Nginx 做访问控制
+// ============================================================
+
 const PORT = Number(process.env.PORT) || 3000;
+const DASHBOARD_TOKEN = process.env.DASHBOARD_TOKEN || "";
+const HOST = process.env.DASHBOARD_HOST || "127.0.0.1";
+
+/** 从 PeriodSummary 数组中掩码 trades 的价格，保留交易明细 */
+function maskTradePrices(periods: PeriodSummary[]): PeriodSummary[] {
+  return periods.map((p) => ({
+    ...p,
+    trades: p.trades?.map((t) => ({ ...t, price: null })),
+  }));
+}
+
+/** 检查请求是否持有有效 token */
+function isAuthorizedToken(req: http.IncomingMessage): boolean {
+  if (!DASHBOARD_TOKEN) return false;
+  const url = new URL(req.url || "/", "http://localhost");
+  const tokenParam = url.searchParams.get("token") || "";
+  const tokenHeader = req.headers["x-dashboard-token"] || "";
+  return tokenParam === DASHBOARD_TOKEN || tokenHeader === DASHBOARD_TOKEN;
+}
 
 const server = http.createServer((req, res) => {
-  const url = req.url || "/";
+  const parsedUrl = new URL(req.url || "/", "http://localhost");
+  const pathname = parsedUrl.pathname;
 
-  // API Endpoint
-  if (url === "/api/data") {
+  // ---- /api/public: 公开安全数据（无 trades） ----
+  if (pathname === "/api/public") {
+    try {
+      const config = loadConfig();
+      const records = scanJournalData(resolveYangjianRoot());
+      const weekly = maskTradePrices(computeWeekly(records));
+      const monthly = maskTradePrices(computeMonthly(records));
+      const yearly = maskTradePrices(computeYearly(records));
+
+      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({ weekly, monthly, yearly, theme: config.theme }));
+    } catch {
+      res.writeHead(500, { "Content-Type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({ error: "内部错误" }));
+    }
+    return;
+  }
+
+  // ---- /api/data: 完整数据，需 token 认证 ----
+  if (pathname === "/api/data") {
+    if (!isAuthorizedToken(req)) {
+      res.writeHead(403, { "Content-Type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({ error: "需要认证" }));
+      return;
+    }
     try {
       const config = loadConfig();
       const records = scanJournalData(resolveYangjianRoot());
@@ -449,17 +500,17 @@ const server = http.createServer((req, res) => {
 
       res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
       res.end(JSON.stringify({ weekly, monthly, yearly, theme: config.theme }));
-    } catch (err: any) {
+    } catch {
       res.writeHead(500, { "Content-Type": "application/json; charset=utf-8" });
-      res.end(JSON.stringify({ error: err.message }));
+      res.end(JSON.stringify({ error: "内部错误" }));
     }
     return;
   }
 
-  // Static files hosting - serve from src/ directly
+  // ---- 静态文件 ----
   const dashboardSourceDir = path.join(__dirname, "../../src");
-  const cleanUrl = url.split("?")[0];
-  let filePath = path.join(dashboardSourceDir, cleanUrl === "/" ? "index.html" : cleanUrl.slice(1));
+  const cleanUrl = pathname === "/" ? "index.html" : pathname.slice(1);
+  const filePath = path.join(dashboardSourceDir, cleanUrl);
 
   // Basic security check: prevent directory traversal
   if (!filePath.startsWith(dashboardSourceDir)) {
@@ -494,9 +545,10 @@ const server = http.createServer((req, res) => {
   });
 });
 
-server.listen(PORT, () => {
+server.listen(PORT, HOST, () => {
   console.log(`========================================`);
   console.log(`Yangjian Dashboard is running!`);
-  console.log(`Open http://localhost:${PORT} in your browser`);
+  console.log(`Listening on http://${HOST}:${PORT} (本地)`);
+  console.log(`公网访问请使用 Nginx 反代`);
   console.log(`========================================`);
 });
