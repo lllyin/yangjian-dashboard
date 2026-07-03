@@ -16,19 +16,23 @@ const detailsTbody = document.getElementById("details-tbody");
 const tradesSection = document.getElementById("trades-section");
 const tradesContainer = document.getElementById("trades-container");
 const refreshButton = document.getElementById("refresh-data");
+const toast = document.getElementById("toast");
+const toastMessage = document.getElementById("toast-message");
+let toastTimer = null;
 
 // Initialize application
 document.addEventListener("DOMContentLoaded", () => {
   fetchDashboardData();
   setupSegmentControls();
   periodSelector.addEventListener("change", handlePeriodChange);
-  refreshButton.addEventListener("click", fetchDashboardData);
+  refreshButton.addEventListener("click", () => fetchDashboardData({ notify: true }));
 });
 
 // Fetch data from local backend server
-async function fetchDashboardData() {
+async function fetchDashboardData({ notify = false } = {}) {
   const selectedPeriod = periodSelector.value;
   const refreshStartedAt = performance.now();
+  let loadedSuccessfully = false;
   refreshButton.disabled = true;
   refreshButton.classList.add("is-refreshing");
   refreshButton.setAttribute("aria-busy", "true");
@@ -60,6 +64,7 @@ async function fetchDashboardData() {
     }
     // Render initially
     renderActivePeriodList(selectedPeriod);
+    loadedSuccessfully = true;
   } catch (err) {
     console.error("数据渲染或解析失败，请检查返回的 JSON 格式和前端逻辑:", err);
     alert(`前端渲染出错了: ${err.message}`);
@@ -71,7 +76,22 @@ async function fetchDashboardData() {
     refreshButton.disabled = false;
     refreshButton.classList.remove("is-refreshing");
     refreshButton.removeAttribute("aria-busy");
+    if (notify && loadedSuccessfully) {
+      showToast("数据已是最新");
+    }
   }
+}
+
+function showToast(message) {
+  if (toastTimer) {
+    clearTimeout(toastTimer);
+  }
+  toastMessage.textContent = message;
+  toast.classList.add("is-visible");
+  toastTimer = setTimeout(() => {
+    toast.classList.remove("is-visible");
+    toastTimer = null;
+  }, 2200);
 }
 
 // Setup segment button click handlers

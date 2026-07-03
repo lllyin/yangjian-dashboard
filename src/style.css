@@ -261,6 +261,47 @@ body {
   to { transform: rotate(360deg); }
 }
 
+.toast {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 42px;
+  padding: 10px 14px;
+  color: var(--text-main);
+  background: rgba(17, 24, 39, 0.94);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.38);
+  font-size: 0.9rem;
+  font-weight: 500;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(10px);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.toast.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.toast-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  color: #d1fae5;
+  background: rgba(16, 185, 129, 0.16);
+  border-radius: 50%;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
 /* KPI Cards Grid */
 .kpi-grid {
   display: grid;
@@ -657,5 +698,11 @@ body {
   }
   .logo-icon {
     font-size: 2rem !important;
+  }
+  .toast {
+    right: 16px;
+    bottom: 16px;
+    left: 16px;
+    justify-content: center;
   }
 }
