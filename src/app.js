@@ -15,25 +15,33 @@ const kpiNetDeposits = document.getElementById("kpi-net-deposits");
 const detailsTbody = document.getElementById("details-tbody");
 const tradesSection = document.getElementById("trades-section");
 const tradesContainer = document.getElementById("trades-container");
+const refreshButton = document.getElementById("refresh-data");
 
 // Initialize application
 document.addEventListener("DOMContentLoaded", () => {
   fetchDashboardData();
   setupSegmentControls();
   periodSelector.addEventListener("change", handlePeriodChange);
+  refreshButton.addEventListener("click", fetchDashboardData);
 });
 
 // Fetch data from local backend server
 async function fetchDashboardData() {
+  const selectedPeriod = periodSelector.value;
+  const refreshStartedAt = performance.now();
+  refreshButton.disabled = true;
+  refreshButton.classList.add("is-refreshing");
+  refreshButton.setAttribute("aria-busy", "true");
+
   try {
     const authToken = new URLSearchParams(window.location.search).get("auth_token") || "";
     const apiUrl = authToken
       ? `/api/data?auth_token=${encodeURIComponent(authToken)}`
       : "/api/public";
 
-    let response = await fetch(apiUrl);
+    let response = await fetch(apiUrl, { cache: "no-store" });
     if (response.status === 403 && authToken) {
-      response = await fetch("/api/public");
+      response = await fetch("/api/public", { cache: "no-store" });
     }
     apiData = await response.json();
     if (apiData.error) {
@@ -51,10 +59,18 @@ async function fetchDashboardData() {
       if (theme.downTextGlow) document.documentElement.style.setProperty('--negative-text-glow', theme.downTextGlow);
     }
     // Render initially
-    renderActivePeriodList();
+    renderActivePeriodList(selectedPeriod);
   } catch (err) {
     console.error("数据渲染或解析失败，请检查返回的 JSON 格式和前端逻辑:", err);
     alert(`前端渲染出错了: ${err.message}`);
+  } finally {
+    const remainingAnimationTime = Math.max(0, 450 - (performance.now() - refreshStartedAt));
+    if (remainingAnimationTime > 0) {
+      await new Promise((resolve) => setTimeout(resolve, remainingAnimationTime));
+    }
+    refreshButton.disabled = false;
+    refreshButton.classList.remove("is-refreshing");
+    refreshButton.removeAttribute("aria-busy");
   }
 }
 
@@ -71,7 +87,7 @@ function setupSegmentControls() {
 }
 
 // Rebuild period instances dropdown when period type (week/month/year) changes
-function renderActivePeriodList() {
+function renderActivePeriodList(selectedPeriod = "") {
   if (!apiData) return;
 
   const list = apiData[activePeriod];
@@ -104,8 +120,9 @@ function renderActivePeriodList() {
     periodSelector.appendChild(option);
   }
 
-  // Auto-select latest instance
-  periodSelector.selectedIndex = 0;
+  const hasSelectedPeriod = selectedPeriod
+    && Array.from(periodSelector.options).some((option) => option.value === selectedPeriod);
+  periodSelector.value = hasSelectedPeriod ? selectedPeriod : periodSelector.options[0].value;
   displaySelectedPeriod();
 }
 
@@ -217,8 +234,8 @@ function displaySelectedPeriod() {
     chartHeader.textContent = "📊 每日盈亏柱状图";
     detailsHeader.textContent = "📅 日度收益明细";
     thDate.textContent = "日期";
-    thPnl.textContent = "日内盈亏";
-    thRate.textContent = "日内收益率";
+    thPnl.textContent = "日盈亏";
+    thRate.textContent = "日收益率";
 
     renderChart(item.days, "daily");
 

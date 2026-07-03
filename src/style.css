@@ -209,6 +209,58 @@ body {
   border: 1px solid rgba(99, 102, 241, 0.2);
 }
 
+.refresh-button {
+  width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 50%;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.refresh-button:hover:not(:disabled) {
+  color: var(--text-main);
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+.refresh-button:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.45);
+  outline-offset: 3px;
+}
+
+.refresh-button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.refresh-icon {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transform-box: fill-box;
+  transform-origin: center;
+  will-change: transform;
+}
+
+.refresh-button.is-refreshing .refresh-icon {
+  animation: refresh-spin 0.8s linear infinite;
+}
+
+@keyframes refresh-spin {
+  to { transform: rotate(360deg); }
+}
+
 /* KPI Cards Grid */
 .kpi-grid {
   display: grid;
@@ -495,7 +547,7 @@ body {
 }
 
 .trade-item-number {
-  font-size: 0.75rem;
+  font-size: 0.95rem;
   color: var(--text-muted);
   font-weight: 600;
   min-width: 2rem;
@@ -527,7 +579,7 @@ body {
 }
 
 .trade-item-price {
-  font-size: 0.9rem;
+  font-size: 0.95rem;
   font-weight: 600;
   font-family: 'Outfit', monospace;
 }
@@ -593,6 +645,11 @@ body {
   .trades-table th,
   .trades-table td {
     padding: 8px 8px !important;
+    font-size: 0.75rem !important;
+  }
+  .trade-item-number,
+  .trade-item-symbol,
+  .trade-item-price {
     font-size: 0.75rem !important;
   }
   .glass-card {

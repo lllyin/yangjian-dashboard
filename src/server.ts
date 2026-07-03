@@ -79,6 +79,10 @@ function parseTableMoney(content: string, label: string): number | null {
   return raw ? parseMoney(raw) : null;
 }
 
+function normalizeTradeName(name: string): string {
+  return name.replace(/[（(]\s*[）)]/g, "").trim();
+}
+
 // Parse trades from trades/*.md files for a given week
 function parseTradesForWeek(yangjianRoot: string, weekName: string): TradeRecord[] {
   const tradesDir = path.join(yangjianRoot, "trades");
@@ -114,7 +118,7 @@ function parseTradesForWeek(yangjianRoot: string, weekName: string): TradeRecord
           tradeNo: trade.tradeNo,
           action: trade.action,
           symbol: trade.symbol,
-          name: trade.name,
+          name: normalizeTradeName(trade.name),
           price: trade.tradePrice,
         });
       }

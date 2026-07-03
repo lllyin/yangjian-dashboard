@@ -51,8 +51,13 @@
             <!-- Dynamically populated -->
           </select>
         </div>
-        <div class="period-details w-full md:w-auto text-left md:text-right">
+        <div class="period-details w-full md:w-auto flex items-center justify-between md:justify-end gap-3">
           <span id="period-date-range" class="date-badge">-</span>
+          <button id="refresh-data" class="refresh-button" type="button" aria-label="刷新数据" title="刷新数据">
+            <svg class="refresh-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M20 11a8.1 8.1 0 0 0-15.5-2M4 4v5h5M4 13a8.1 8.1 0 0 0 15.5 2M20 20v-5h-5"/>
+            </svg>
+          </button>
         </div>
       </section>
 
@@ -113,8 +118,8 @@
               <tr class="border-b border-gray-800">
                 <th id="th-date" class="py-3 px-4 text-gray-400 font-medium uppercase tracking-wider text-xs">日期</th>
                 <th id="th-asset" class="py-3 px-4 text-gray-400 font-medium uppercase tracking-wider text-xs">总资产</th>
-                <th id="th-pnl" class="py-3 px-4 text-gray-400 font-medium uppercase tracking-wider text-xs">日内盈亏</th>
-                <th id="th-rate" class="py-3 px-4 text-gray-400 font-medium uppercase tracking-wider text-xs">日内收益率</th>
+                <th id="th-pnl" class="py-3 px-4 text-gray-400 font-medium uppercase tracking-wider text-xs">日盈亏</th>
+                <th id="th-rate" class="py-3 px-4 text-gray-400 font-medium uppercase tracking-wider text-xs">日收益率</th>
                 <th class="py-3 px-4 text-gray-400 font-medium uppercase tracking-wider text-xs">盈亏表现</th>
               </tr>
             </thead>
