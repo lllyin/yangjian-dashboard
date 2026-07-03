@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import http from "node:http";
+import crypto from "node:crypto";
 import { calculateAccountReturns, parseTradesMarkdown, type ParsedTrade } from "yangjian/calculation";
 
 interface Config {
@@ -448,6 +449,13 @@ function computeYearly(records: DailyRecord[]): PeriodSummary[] {
 const PORT = Number(process.env.PORT) || 3000;
 const AUTH_TOKEN = process.env.AUTH_TOKEN || "";
 const HOST = process.env.DASHBOARD_HOST || "127.0.0.1";
+const DASHBOARD_SOURCE_DIR = path.join(__dirname, "../../src");
+const STATIC_ASSET_VERSION = crypto
+  .createHash("sha256")
+  .update(fs.readFileSync(path.join(DASHBOARD_SOURCE_DIR, "app.js")))
+  .update(fs.readFileSync(path.join(DASHBOARD_SOURCE_DIR, "style.css")))
+  .digest("hex")
+  .slice(0, 12);
 
 /** 从 PeriodSummary 数组中掩码 trades 的价格，保留交易明细 */
 function maskTradePrices(periods: PeriodSummary[]): PeriodSummary[] {
@@ -511,12 +519,11 @@ const server = http.createServer((req, res) => {
   }
 
   // ---- 静态文件 ----
-  const dashboardSourceDir = path.join(__dirname, "../../src");
   const cleanUrl = pathname === "/" ? "index.html" : pathname.slice(1);
-  const filePath = path.join(dashboardSourceDir, cleanUrl);
+  const filePath = path.join(DASHBOARD_SOURCE_DIR, cleanUrl);
 
   // Basic security check: prevent directory traversal
-  if (!filePath.startsWith(dashboardSourceDir)) {
+  if (!filePath.startsWith(DASHBOARD_SOURCE_DIR)) {
     res.writeHead(403);
     res.end("Forbidden");
     return;
@@ -529,11 +536,16 @@ const server = http.createServer((req, res) => {
      return;
    }
 
-    // 为 index.html 注入 app.js 时间戳，实现缓存破坏
+    // HTML 每次重新校验；静态资源内容不变时复用同一个版本号。
     if (filePath.endsWith("index.html")) {
       const html = fs.readFileSync(filePath, "utf8");
-      const htmlWithHash = html.replace("app.js", `app.js?t=${Date.now()}`);
-      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+      const htmlWithHash = html
+        .replace("style.css", `style.css?t=${STATIC_ASSET_VERSION}`)
+        .replace("app.js", `app.js?t=${STATIC_ASSET_VERSION}`);
+      res.writeHead(200, {
+        "Content-Type": "text/html; charset=utf-8",
+        "Cache-Control": "no-cache",
+      });
       res.end(htmlWithHash);
       return;
     }
@@ -543,7 +555,16 @@ const server = http.createServer((req, res) => {
     if (filePath.endsWith(".js")) contentType = "application/javascript";
     if (filePath.endsWith(".json")) contentType = "application/json";
 
-    res.writeHead(200, { "Content-Type": contentType + "; charset=utf-8" });
+    const isVersionedAsset = (
+      (filePath.endsWith(".css") || filePath.endsWith(".js"))
+      && parsedUrl.searchParams.get("t") === STATIC_ASSET_VERSION
+    );
+    res.writeHead(200, {
+      "Content-Type": contentType + "; charset=utf-8",
+      "Cache-Control": isVersionedAsset
+        ? "public, max-age=31536000, immutable"
+        : "no-cache",
+    });
     fs.createReadStream(filePath).pipe(res);
   });
 });
