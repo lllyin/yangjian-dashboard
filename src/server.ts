@@ -33,6 +33,7 @@ interface DailyRecord {
   pnl: number;
   pnlRate: number;
   source: "snapshot" | "rebuilt" | "close"; // 数据来源标识
+  updatedAt?: string;
 }
 
 interface TradeRecord {
@@ -54,6 +55,7 @@ interface PeriodSummary {
   days: DailyRecord[];
   trades?: TradeRecord[]; // Only for weekly summaries
   hasRebuiltData?: boolean; // 区间内是否包含 rebuilt 重建数据
+  updatedAt?: string;
 }
 
 // Helper to load configurations
@@ -82,6 +84,13 @@ function parseTableMoney(content: string, label: string): number | null {
 
 function normalizeTradeName(name: string): string {
   return name.replace(/[（(]\s*[）)]/g, "").trim();
+}
+
+function getLatestUpdatedAt(days: DailyRecord[]): string | undefined {
+  return days
+    .map((d) => d.updatedAt)
+    .filter((value): value is string => Boolean(value))
+    .sort((a, b) => b.localeCompare(a))[0];
 }
 
 // Parse trades from trades/*.md files for a given week
@@ -176,6 +185,7 @@ function scanJournalData(yangjianRoot: string): DailyRecord[] {
       let pnlRate = 0;
       let parsedSuccessfully = false;
       let source: DailyRecord["source"] = "close";
+      let updatedAt: string | undefined;
 
       // 1. Try account-snapshots.json first, then fall back to rebuilt.json
       const snapshotFile = fs.existsSync(snapshotPath)
@@ -197,6 +207,7 @@ function scanJournalData(yangjianRoot: string): DailyRecord[] {
             totalAsset = latestSession.summary.totalAsset ?? 0;
             pnl = latestSession.summary.todayNetWorthPnl ?? (totalAsset - prevClose);
             pnlRate = latestSession.summary.todayNetWorthPnlRate ?? (prevClose === 0 ? 0 : pnl / prevClose);
+            updatedAt = latestSession.updatedAt;
             parsedSuccessfully = true;
           }
         } catch (e) {
@@ -236,6 +247,7 @@ function scanJournalData(yangjianRoot: string): DailyRecord[] {
           pnl: Math.round(pnl * 100) / 100,
           pnlRate: Math.round(pnlRate * 10000) / 10000,
           source,
+          updatedAt,
         });
       }
     }
@@ -305,6 +317,7 @@ function computeWeekly(records: DailyRecord[]): PeriodSummary[] {
       days,
       trades,
       hasRebuiltData: days.some((d) => d.source === "rebuilt"),
+      updatedAt: getLatestUpdatedAt(days),
     });
   }
 
@@ -368,6 +381,7 @@ function computeMonthly(records: DailyRecord[]): PeriodSummary[] {
       endAsset: Math.round(endAsset * 100) / 100,
       days,
       hasRebuiltData: days.some((d) => d.source === "rebuilt"),
+      updatedAt: getLatestUpdatedAt(days),
     });
   }
 
@@ -431,6 +445,7 @@ function computeYearly(records: DailyRecord[]): PeriodSummary[] {
       endAsset: Math.round(endAsset * 100) / 100,
       days,
       hasRebuiltData: days.some((d) => d.source === "rebuilt"),
+      updatedAt: getLatestUpdatedAt(days),
     });
   }
 

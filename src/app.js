@@ -16,6 +16,7 @@ const detailsTbody = document.getElementById("details-tbody");
 const tradesSection = document.getElementById("trades-section");
 const tradesContainer = document.getElementById("trades-container");
 const refreshButton = document.getElementById("refresh-data");
+const dataUpdatedAt = document.getElementById("data-updated-at");
 const toast = document.getElementById("toast");
 const toastMessage = document.getElementById("toast-message");
 let toastTimer = null;
@@ -152,6 +153,9 @@ function handlePeriodChange() {
 
 function clearDisplay() {
   periodDateRange.textContent = "-";
+  if (dataUpdatedAt) {
+    dataUpdatedAt.textContent = "Data updated at -";
+  }
   kpiPnl.textContent = "0.00 元";
   kpiRate.textContent = "0.00%";
   kpiBasisAsset.textContent = "0.00 元";
@@ -209,6 +213,10 @@ function displaySelectedPeriod() {
     periodDateRange.title = "";
   }
 
+  if (dataUpdatedAt) {
+    dataUpdatedAt.textContent = item.updatedAt ? `Data updated at ${formatUpdatedAt(item.updatedAt)}` : "Data updated at -";
+  }
+
   // 3. Render Chart
   const chartHeader = document.getElementById("chart-header");
   const detailsHeader = document.getElementById("details-header");
@@ -251,7 +259,7 @@ function displaySelectedPeriod() {
       detailsTbody.appendChild(tr);
     });
   } else {
-    chartHeader.textContent = "📊 每日盈亏柱状图";
+    chartHeader.textContent = "📊 每日盈亏";
     detailsHeader.textContent = "📅 日度收益明细";
     thDate.textContent = "日期";
     thPnl.textContent = "日盈亏";
@@ -475,4 +483,13 @@ function formatYmd(value) {
     return `${value.slice(0, 4)}-${value.slice(4, 6)}-${value.slice(6, 8)}`;
   }
   return value;
+}
+
+function formatUpdatedAt(value) {
+  const normalized = String(value).trim();
+  const match = normalized.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2})(?::\d{2})?/);
+  if (match) {
+    return `${match[1]} ${match[2]}`;
+  }
+  return normalized;
 }

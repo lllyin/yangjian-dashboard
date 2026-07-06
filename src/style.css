@@ -157,12 +157,11 @@ body {
 
 /* Control Panel */
 .control-panel {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 1.5rem;
   padding: 1.2rem 1.5rem;
+}
+
+.control-panel-main {
+  width: 100%;
 }
 
 .selector-container {
@@ -207,6 +206,10 @@ body {
   font-size: 0.85rem;
   font-weight: 500;
   border: 1px solid rgba(99, 102, 241, 0.2);
+}
+
+.period-details {
+  flex-wrap: wrap;
 }
 
 .refresh-button {
@@ -388,6 +391,14 @@ body {
   font-weight: 600;
 }
 
+.data-freshness {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+}
+
 .glow-indicator {
   font-size: 0.75rem;
   font-weight: 700;
@@ -397,6 +408,45 @@ body {
   padding: 4px 8px;
   border-radius: 4px;
   animation: pulse 2s infinite;
+}
+
+.updated-at {
+  margin-top: -1rem;
+  padding-left: 0.15rem;
+  color: rgba(156, 163, 175, 0.72);
+  font-size: 0.72rem;
+  font-weight: 400;
+  line-height: 1.4;
+  text-align: right;
+}
+
+.footer-repo-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  margin-bottom: 0.45rem;
+  color: #a5b4fc;
+  font-weight: 500;
+  text-decoration: none;
+  transition: color 0.2s ease, opacity 0.2s ease;
+}
+
+.footer-repo-link:hover {
+  color: var(--text-main);
+}
+
+.footer-repo-link:focus-visible {
+  outline: 2px solid rgba(165, 180, 252, 0.55);
+  outline-offset: 4px;
+  border-radius: 4px;
+}
+
+.footer-repo-icon {
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
+  flex: 0 0 auto;
 }
 
 @keyframes pulse {
