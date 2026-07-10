@@ -34,6 +34,15 @@ interface DailyRecord {
   pnlRate: number;
   source: "snapshot" | "rebuilt" | "close"; // 数据来源标识
   updatedAt?: string;
+  intraday?: IntradayPoint[];
+}
+
+interface IntradayPoint {
+  time: string; // HH:mm
+  updatedAt?: string;
+  totalAsset: number;
+  pnl: number;
+  pnlRate: number;
 }
 
 interface TradeRecord {
@@ -94,6 +103,17 @@ function getLatestUpdatedAt(days: DailyRecord[]): string | undefined {
     .map((d) => d.updatedAt)
     .filter((value): value is string => Boolean(value))
     .sort((a, b) => b.localeCompare(a))[0];
+}
+
+function formatSessionTime(value: unknown): string {
+  const raw = String(value ?? "").trim();
+  if (/^\d{4}$/.test(raw)) {
+    return `${raw.slice(0, 2)}:${raw.slice(2, 4)}`;
+  }
+  if (/^\d{2}:\d{2}$/.test(raw)) {
+    return raw;
+  }
+  return raw;
 }
 
 // Parse trades from trades/*.md files for a given week
@@ -189,6 +209,7 @@ function scanJournalData(yangjianRoot: string): DailyRecord[] {
       let parsedSuccessfully = false;
       let source: DailyRecord["source"] = "close";
       let updatedAt: string | undefined;
+      let intraday: IntradayPoint[] = [];
 
       // 1. Try account-snapshots.json first, then fall back to rebuilt.json
       const snapshotFile = fs.existsSync(snapshotPath)
@@ -200,6 +221,22 @@ function scanJournalData(yangjianRoot: string): DailyRecord[] {
           const snapshot = JSON.parse(fs.readFileSync(snapshotFile, "utf8"));
           const prevClose = snapshot.prevCloseTotalAsset ?? 0;
           const sessions = Array.isArray(snapshot.sessions) ? snapshot.sessions : [];
+          intraday = sessions
+            .filter((s: any) => typeof s === "object" && s !== null && s.time && s.summary)
+            .map((s: any) => {
+              const sessionTotalAsset = s.summary.totalAsset ?? 0;
+              const sessionPnl = s.summary.todayNetWorthPnl ?? (sessionTotalAsset - prevClose);
+              const sessionPnlRate = s.summary.todayNetWorthPnlRate ?? (prevClose === 0 ? 0 : sessionPnl / prevClose);
+
+              return {
+                time: formatSessionTime(s.time),
+                updatedAt: s.updatedAt,
+                totalAsset: Math.round(sessionTotalAsset * 100) / 100,
+                pnl: Math.round(sessionPnl * 100) / 100,
+                pnlRate: Math.round(sessionPnlRate * 10000) / 10000,
+              };
+            })
+            .sort((a: IntradayPoint, b: IntradayPoint) => a.time.localeCompare(b.time));
           
           // Select latest session
           const latestSession = sessions
@@ -251,6 +288,7 @@ function scanJournalData(yangjianRoot: string): DailyRecord[] {
           pnlRate: Math.round(pnlRate * 10000) / 10000,
           source,
           updatedAt,
+          intraday,
         });
       }
     }

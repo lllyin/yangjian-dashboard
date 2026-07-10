@@ -2,6 +2,9 @@
 let apiData = null; // Store weekly, monthly, yearly data
 let activePeriod = "weekly"; // "weekly" | "monthly" | "yearly"
 let chartInstance = null; // Store Chart.js instance
+let trendChartInstance = null; // Store persistent trend Chart.js instance
+let modalTrendChartInstance = null; // Store modal trend Chart.js instance
+let modalCloseTimer = null;
 
 // Elements
 const segmentButtons = document.querySelectorAll(".segment-btn");
@@ -17,6 +20,16 @@ const tradesSection = document.getElementById("trades-section");
 const tradesContainer = document.getElementById("trades-container");
 const refreshButton = document.getElementById("refresh-data");
 const dataUpdatedAt = document.getElementById("data-updated-at");
+const trendHeader = document.getElementById("trend-header");
+const trendSubtitle = document.getElementById("trend-subtitle");
+const trendEmpty = document.getElementById("trend-empty");
+const trendChartContainer = document.getElementById("trend-chart-container");
+const intradayModal = document.getElementById("intraday-modal");
+const intradayModalClose = document.getElementById("intraday-modal-close");
+const modalTrendTitle = document.getElementById("intraday-modal-title");
+const modalTrendSubtitle = document.getElementById("modal-trend-subtitle");
+const modalTrendEmpty = document.getElementById("modal-trend-empty");
+const modalTrendChartContainer = document.getElementById("modal-trend-chart-container");
 const toast = document.getElementById("toast");
 const toastMessage = document.getElementById("toast-message");
 let toastTimer = null;
@@ -25,6 +38,7 @@ let toastTimer = null;
 document.addEventListener("DOMContentLoaded", () => {
   fetchDashboardData();
   setupSegmentControls();
+  setupIntradayModal();
   periodSelector.addEventListener("change", handlePeriodChange);
   refreshButton.addEventListener("click", () => fetchDashboardData({ notify: true }));
 });
@@ -167,6 +181,23 @@ function clearDisplay() {
     chartInstance.destroy();
     chartInstance = null;
   }
+  if (trendChartInstance) {
+    trendChartInstance.destroy();
+    trendChartInstance = null;
+  }
+  if (trendHeader) {
+    trendHeader.textContent = "📈 收益走势";
+  }
+  if (trendSubtitle) {
+    trendSubtitle.textContent = "-";
+  }
+  if (trendEmpty) {
+    trendEmpty.style.display = "flex";
+  }
+  if (trendChartContainer) {
+    trendChartContainer.style.display = "none";
+  }
+  closeIntradayModal();
 }
 
 // Displays metrics, charts, and list for selected period instance
@@ -203,8 +234,8 @@ function displaySelectedPeriod() {
     const end = formatYmd(item.days[item.days.length - 1].date);
     periodDateRange.textContent = `${start} 至 ${end}`;
     if (item.hasRebuiltData) {
-      periodDateRange.textContent += " · 含重建数据";
-      periodDateRange.title = "部分交易日数据来自 account-snapshots.rebuilt.json（历史快照重建）";
+      periodDateRange.textContent += " *";
+      periodDateRange.title = "部分交易日数据来自历史快照重建";
     } else {
       periodDateRange.title = "";
     }
@@ -234,6 +265,7 @@ function displaySelectedPeriod() {
     const yearPrefix = selectedLabel;
     const months = apiData.monthly.filter((m) => m.label.startsWith(yearPrefix));
     renderChart(months, "monthly");
+    renderPersistentTrend(buildYearTrend(item, months));
 
     // 4. Populate table detail rows (monthly data, reverse chronological order)
     detailsTbody.innerHTML = "";
@@ -256,6 +288,17 @@ function displaySelectedPeriod() {
         <td class="table-pnl ${pnlClass}">${displayPnlRate}</td>
         <td>${statusPill}</td>
       `;
+      tr.classList.add("day-detail-row");
+      tr.tabIndex = 0;
+      tr.setAttribute("role", "button");
+      tr.setAttribute("aria-label", `查看 ${displayDate} 当月收益走势`);
+      tr.addEventListener("click", () => openTrendModal(buildMonthTrend(month)));
+      tr.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          openTrendModal(buildMonthTrend(month));
+        }
+      });
       detailsTbody.appendChild(tr);
     });
   } else {
@@ -266,6 +309,7 @@ function displaySelectedPeriod() {
     thRate.textContent = "日收益率";
 
     renderChart(item.days, "daily");
+    renderPersistentTrend(activePeriod === "weekly" ? buildLatestIntradayTrend(item.days) : buildMonthTrend(item));
 
     // 4. Populate table detail rows (daily data, reverse chronological order)
     detailsTbody.innerHTML = "";
@@ -288,6 +332,17 @@ function displaySelectedPeriod() {
         <td class="table-pnl ${pnlClass}">${displayPnlRate}</td>
         <td>${statusPill}</td>
       `;
+      tr.classList.add("day-detail-row");
+      tr.tabIndex = 0;
+      tr.setAttribute("role", "button");
+      tr.setAttribute("aria-label", `查看 ${displayDate} 当日收益走势`);
+      tr.addEventListener("click", () => openTrendModal(buildDayIntradayTrend(day)));
+      tr.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          openTrendModal(buildDayIntradayTrend(day));
+        }
+      });
       detailsTbody.appendChild(tr);
     });
   }
@@ -365,6 +420,284 @@ function displaySelectedPeriod() {
   } else {
     tradesSection.style.display = "none";
   }
+}
+
+function setupIntradayModal() {
+  if (!intradayModal) return;
+
+  intradayModalClose?.addEventListener("click", closeIntradayModal);
+  intradayModal.addEventListener("click", (event) => {
+    if (event.target === intradayModal) {
+      closeIntradayModal();
+    }
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && intradayModal.classList.contains("is-open")) {
+      closeIntradayModal();
+    }
+  });
+}
+
+function openTrendModal(trend) {
+  if (!intradayModal) return;
+  if (modalCloseTimer) {
+    clearTimeout(modalCloseTimer);
+    modalCloseTimer = null;
+  }
+
+  intradayModal.classList.remove("is-closing");
+  intradayModal.classList.add("is-open");
+  intradayModal.setAttribute("aria-hidden", "false");
+  document.body.classList.add("modal-open");
+
+  renderTrendChart({
+    chart: "modal",
+    trend,
+  });
+  requestAnimationFrame(() => intradayModalClose?.focus());
+}
+
+function closeIntradayModal() {
+  if (!intradayModal) return;
+  if (!intradayModal.classList.contains("is-open")) return;
+
+  intradayModal.classList.remove("is-open");
+  intradayModal.classList.add("is-closing");
+  document.body.classList.remove("modal-open");
+
+  modalCloseTimer = setTimeout(() => {
+    intradayModal.classList.remove("is-closing");
+    intradayModal.setAttribute("aria-hidden", "true");
+    if (modalTrendChartInstance) {
+      modalTrendChartInstance.destroy();
+      modalTrendChartInstance = null;
+    }
+    modalCloseTimer = null;
+  }, 180);
+}
+
+function renderPersistentTrend(trend) {
+  renderTrendChart({
+    chart: "persistent",
+    trend,
+  });
+}
+
+function renderTrendChart({ chart, trend }) {
+  const isModal = chart === "modal";
+  const titleEl = isModal ? modalTrendTitle : trendHeader;
+  const subtitleEl = isModal ? modalTrendSubtitle : trendSubtitle;
+  const emptyEl = isModal ? modalTrendEmpty : trendEmpty;
+  const containerEl = isModal ? modalTrendChartContainer : trendChartContainer;
+  const canvas = document.getElementById(isModal ? "modal-trend-chart" : "trend-chart");
+  const emptyText = trend?.emptyText || "暂无走势数据";
+
+  if (isModal && modalTrendChartInstance) {
+    modalTrendChartInstance.destroy();
+    modalTrendChartInstance = null;
+  }
+  if (!isModal && trendChartInstance) {
+    trendChartInstance.destroy();
+    trendChartInstance = null;
+  }
+
+  if (titleEl) {
+    titleEl.textContent = trend?.title || "📈 收益走势";
+  }
+  if (subtitleEl) {
+    subtitleEl.textContent = trend?.subtitle || "-";
+  }
+
+  if (!trend || !Array.isArray(trend.points) || trend.points.length === 0) {
+    if (emptyEl) {
+      emptyEl.textContent = emptyText;
+      emptyEl.style.display = "flex";
+    }
+    if (containerEl) containerEl.style.display = "none";
+    return;
+  }
+
+  if (emptyEl) emptyEl.style.display = "none";
+  if (containerEl) containerEl.style.display = "block";
+
+  const instance = createTrendChart(canvas, trend.points, trend);
+  if (isModal) {
+    modalTrendChartInstance = instance;
+  } else {
+    trendChartInstance = instance;
+  }
+}
+
+function createTrendChart(canvas, points, trend) {
+  const ctx = canvas.getContext("2d");
+  const labels = points.map((point) => point.label);
+  const pnlData = points.map((point) => point.pnl);
+  const lastPnl = pnlData[pnlData.length - 1] ?? 0;
+  const lineColor = lastPnl >= 0
+    ? ((apiData && apiData.theme && apiData.theme.upColor) || "#ef4444")
+    : ((apiData && apiData.theme && apiData.theme.downColor) || "#10b981");
+
+  return new Chart(ctx, {
+    type: "line",
+    data: {
+      labels,
+      datasets: [{
+        label: trend.datasetLabel || "净值盈亏 (元)",
+        data: pnlData,
+        borderColor: lineColor,
+        backgroundColor: lineColor + "22",
+        borderWidth: 2,
+        pointRadius: 3,
+        pointHoverRadius: 5,
+        pointBackgroundColor: lineColor,
+        pointBorderColor: "#111827",
+        pointBorderWidth: 1.5,
+        tension: 0.28,
+        fill: true
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: {
+        intersect: false,
+        mode: "index"
+      },
+      plugins: {
+        legend: {
+          display: false
+        },
+        tooltip: {
+          backgroundColor: "rgba(17, 24, 39, 0.95)",
+          titleColor: "#fff",
+          bodyColor: "#f3f4f6",
+          borderColor: "rgba(255,255,255,0.08)",
+          borderWidth: 1,
+          padding: 12,
+          font: {
+            family: "Outfit"
+          },
+          callbacks: {
+            label: function(context) {
+              const point = points[context.dataIndex];
+              const lines = [
+                ` 盈亏: ${point.pnl >= 0 ? "+" : ""}${formatMoney(point.pnl)} 元`
+              ];
+              if (typeof point.pnlRate === "number") {
+                lines.push(` 收益率: ${point.pnlRate >= 0 ? "+" : ""}${(point.pnlRate * 100).toFixed(2)}%`);
+              }
+              if (typeof point.totalAsset === "number") {
+                lines.push(` 总资产: ${formatMoney(point.totalAsset)} 元`);
+              }
+              return lines;
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid: {
+            color: "rgba(255, 255, 255, 0.04)"
+          },
+          ticks: {
+            color: "#9ca3af",
+            font: {
+              family: "Outfit",
+              size: 11
+            }
+          }
+        },
+        y: {
+          grid: {
+            color: "rgba(255, 255, 255, 0.04)"
+          },
+          ticks: {
+            color: "#9ca3af",
+            font: {
+              family: "Outfit",
+              size: 11
+            },
+            callback: function(value) {
+              return (value >= 0 ? "+" : "") + value.toLocaleString();
+            }
+          }
+        }
+      }
+    }
+  });
+}
+
+function buildLatestIntradayTrend(days) {
+  const latestDay = [...(days || [])]
+    .reverse()
+    .find((day) => Array.isArray(day.intraday) && day.intraday.length > 0);
+
+  return latestDay
+    ? buildDayIntradayTrend(latestDay)
+    : {
+        title: "📈 当日收益走势",
+        subtitle: "-",
+        points: [],
+        emptyText: "暂无分时快照数据",
+      };
+}
+
+function buildDayIntradayTrend(day) {
+  return {
+    title: "📈 当日收益走势",
+    subtitle: day?.date ? formatYmdWithWeekday(day.date) : "-",
+    points: (day?.intraday || []).map((point) => ({
+      label: point.time,
+      pnl: point.pnl,
+      pnlRate: point.pnlRate,
+      totalAsset: point.totalAsset,
+    })),
+    datasetLabel: "当日净值盈亏 (元)",
+    emptyText: "暂无分时快照数据",
+  };
+}
+
+function buildMonthTrend(month) {
+  const days = Array.isArray(month?.days) ? month.days : [];
+  let cumulativePnl = 0;
+  const basisAsset = month?.basisAsset || 0;
+
+  return {
+    title: "📈 当月收益走势",
+    subtitle: month?.label || "-",
+    points: days.map((day) => {
+      cumulativePnl += day.pnl;
+      return {
+        label: formatMonthDay(day.date),
+        pnl: Math.round(cumulativePnl * 100) / 100,
+        pnlRate: basisAsset === 0 ? 0 : cumulativePnl / basisAsset,
+        totalAsset: day.totalAsset,
+      };
+    }),
+    datasetLabel: "当月累计盈亏 (元)",
+    emptyText: "暂无当月收益走势数据",
+  };
+}
+
+function buildYearTrend(year, months) {
+  let cumulativePnl = 0;
+  const basisAsset = year?.basisAsset || 0;
+
+  return {
+    title: "📈 当年收益走势",
+    subtitle: year?.label || "-",
+    points: (months || []).map((month) => {
+      cumulativePnl += month.pnl;
+      return {
+        label: month.label,
+        pnl: Math.round(cumulativePnl * 100) / 100,
+        pnlRate: basisAsset === 0 ? 0 : cumulativePnl / basisAsset,
+        totalAsset: month.endAsset,
+      };
+    }),
+    datasetLabel: "当年累计盈亏 (元)",
+    emptyText: "暂无当年收益走势数据",
+  };
 }
 
 // Generate the Chart.js visualization
@@ -481,6 +814,13 @@ function formatPnlSign(value) {
 function formatYmd(value) {
   if (value.length === 8) {
     return `${value.slice(0, 4)}-${value.slice(4, 6)}-${value.slice(6, 8)}`;
+  }
+  return value;
+}
+
+function formatMonthDay(value) {
+  if (value.length === 8) {
+    return `${value.slice(4, 6)}/${value.slice(6, 8)}`;
   }
   return value;
 }

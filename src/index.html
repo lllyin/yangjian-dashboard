@@ -110,6 +110,20 @@
         </div>
       </section>
 
+      <!-- Period Trend -->
+      <section class="chart-section glass-card">
+        <div class="section-header mb-6">
+          <div>
+            <h2 id="trend-header" class="text-lg font-semibold">📈 当日收益走势</h2>
+            <p id="trend-subtitle" class="trend-subtitle">-</p>
+          </div>
+        </div>
+        <div id="trend-empty" class="trend-empty" style="display: none;">暂无走势数据</div>
+        <div id="trend-chart-container" class="trend-chart-container">
+          <canvas id="trend-chart"></canvas>
+        </div>
+      </section>
+
       <!-- Detailed Day Listing -->
       <section class="details-section glass-card">
         <div class="section-header mb-4">
@@ -158,6 +172,24 @@
   <div id="toast" class="toast" role="status" aria-live="polite" aria-atomic="true">
     <span class="toast-icon" aria-hidden="true">✓</span>
     <span id="toast-message"></span>
+  </div>
+
+  <div id="intraday-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="intraday-modal-title" aria-hidden="true">
+    <div class="modal-panel">
+      <div class="modal-header">
+        <div>
+          <h2 id="intraday-modal-title" class="modal-title">📈 收益走势</h2>
+          <p id="modal-trend-subtitle" class="trend-subtitle">-</p>
+        </div>
+        <button id="intraday-modal-close" class="modal-close-button" type="button" aria-label="关闭弹窗" title="关闭">
+          <span aria-hidden="true">×</span>
+        </button>
+      </div>
+      <div id="modal-trend-empty" class="trend-empty" style="display: none;">暂无走势数据</div>
+      <div id="modal-trend-chart-container" class="trend-chart-container modal-trend-chart-container">
+        <canvas id="modal-trend-chart"></canvas>
+      </div>
+    </div>
   </div>
 
   <script src="app.js"></script>
