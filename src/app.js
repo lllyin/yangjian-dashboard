@@ -311,7 +311,7 @@ function displaySelectedPeriod() {
     
     dates.forEach((date) => {
       const trades = tradesByDate[date];
-      const displayDate = formatYmd(date);
+      const displayDate = formatYmdWithWeekday(date);
       
       // Create date card
       const dateCard = document.createElement("div");
@@ -483,6 +483,22 @@ function formatYmd(value) {
     return `${value.slice(0, 4)}-${value.slice(4, 6)}-${value.slice(6, 8)}`;
   }
   return value;
+}
+
+function formatYmdWithWeekday(value) {
+  const formattedDate = formatYmd(value);
+  if (!/^\d{8}$/.test(value)) {
+    return formattedDate;
+  }
+
+  const year = Number(value.slice(0, 4));
+  const month = Number(value.slice(4, 6));
+  const day = Number(value.slice(6, 8));
+  const weekday = ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"][
+    new Date(year, month - 1, day).getDay()
+  ];
+
+  return `${formattedDate} ${weekday}`;
 }
 
 function formatUpdatedAt(value) {

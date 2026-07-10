@@ -83,7 +83,10 @@ function parseTableMoney(content: string, label: string): number | null {
 }
 
 function normalizeTradeName(name: string): string {
-  return name.replace(/[（(]\s*[）)]/g, "").trim();
+  return name
+    .replace(/^[\/\s]+/, "")
+    .replace(/[（(]\s*[）)]/g, "")
+    .trim();
 }
 
 function getLatestUpdatedAt(days: DailyRecord[]): string | undefined {
