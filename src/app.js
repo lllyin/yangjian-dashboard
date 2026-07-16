@@ -303,7 +303,7 @@ function displaySelectedPeriod() {
     });
   } else {
     chartHeader.textContent = "📊 每日盈亏";
-    detailsHeader.textContent = "📅 日度收益明细";
+    detailsHeader.textContent = "📅 每日收益明细";
     thDate.textContent = "日期";
     thPnl.textContent = "日盈亏";
     thRate.textContent = "日收益率";
@@ -473,7 +473,7 @@ function closeIntradayModal() {
       modalTrendChartInstance = null;
     }
     modalCloseTimer = null;
-  }, 180);
+  }, 320);
 }
 
 function renderPersistentTrend(trend) {
@@ -533,9 +533,9 @@ function createTrendChart(canvas, points, trend) {
   const labels = points.map((point) => point.label);
   const pnlData = points.map((point) => point.pnl);
   const lastPnl = pnlData[pnlData.length - 1] ?? 0;
-  const lineColor = lastPnl >= 0
-    ? ((apiData && apiData.theme && apiData.theme.upColor) || "#ef4444")
-    : ((apiData && apiData.theme && apiData.theme.downColor) || "#10b981");
+  const upColor = (apiData && apiData.theme && apiData.theme.upColor) || "#ef4444";
+  const downColor = (apiData && apiData.theme && apiData.theme.downColor) || "#10b981";
+  const lineColor = lastPnl >= 0 ? upColor : downColor;
 
   return new Chart(ctx, {
     type: "line",
@@ -545,7 +545,6 @@ function createTrendChart(canvas, points, trend) {
         label: trend.datasetLabel || "净值盈亏 (元)",
         data: pnlData,
         borderColor: lineColor,
-        backgroundColor: lineColor + "22",
         borderWidth: 2,
         pointRadius: 3,
         pointHoverRadius: 5,
@@ -553,7 +552,11 @@ function createTrendChart(canvas, points, trend) {
         pointBorderColor: "#111827",
         pointBorderWidth: 1.5,
         tension: 0.28,
-        fill: true
+        fill: {
+          target: "origin",
+          above: upColor + "2e",
+          below: downColor + "2e"
+        }
       }]
     },
     options: {
