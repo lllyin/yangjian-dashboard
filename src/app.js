@@ -254,10 +254,11 @@ function displaySelectedPeriod() {
   const thDate = document.getElementById("th-date");
   const thPnl = document.getElementById("th-pnl");
   const thRate = document.getElementById("th-rate");
+  const latestDetailsDate = item.days?.[item.days.length - 1]?.date;
 
   if (activePeriod === "yearly") {
     chartHeader.textContent = "📊 每月盈亏柱状图";
-    detailsHeader.textContent = "📅 月度收益明细";
+    renderDetailsHeader("月度收益明细", latestDetailsDate);
     thDate.textContent = "月份";
     thPnl.textContent = "月度盈亏";
     thRate.textContent = "月度收益率";
@@ -303,7 +304,7 @@ function displaySelectedPeriod() {
     });
   } else {
     chartHeader.textContent = "📊 每日盈亏";
-    detailsHeader.textContent = "📅 每日收益明细";
+    renderDetailsHeader("每日收益明细", latestDetailsDate);
     thDate.textContent = "日期";
     thPnl.textContent = "日盈亏";
     thRate.textContent = "日收益率";
@@ -377,7 +378,7 @@ function displaySelectedPeriod() {
       dateHeader.className = "trade-date-header";
       dateHeader.innerHTML = `
         <div class="trade-date-label">
-          <span class="trade-date-icon">📅</span>
+          <img class="trade-date-icon" src="${calendarIconUrl(date)}" alt="" aria-hidden="true" loading="lazy" />
           <span class="trade-date-text">${displayDate}</span>
         </div>
         <span class="trade-count-badge">${trades.length} 笔交易</span>
@@ -842,6 +843,22 @@ function formatYmdWithWeekday(value) {
   ];
 
   return `${formattedDate} ${weekday}`;
+}
+
+function renderDetailsHeader(label, date) {
+  const detailsHeader = document.getElementById("details-header");
+  if (!detailsHeader) return;
+
+  detailsHeader.classList.add("details-heading");
+  detailsHeader.innerHTML = `
+    <img class="section-calendar-icon" src="${calendarIconUrl(date)}" alt="" aria-hidden="true" />
+    <span>${label}</span>
+  `;
+}
+
+function calendarIconUrl(value) {
+  const dateParam = value ? `date=${encodeURIComponent(value)}&` : "";
+  return `/api/icon/calendar?${dateParam}locale=cn&color=red&weekday=0`;
 }
 
 function formatUpdatedAt(value) {

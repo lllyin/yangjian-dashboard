@@ -529,9 +529,86 @@ function isAuthorizedToken(req: http.IncomingMessage): boolean {
   return tokenParam === AUTH_TOKEN;
 }
 
+const CALENDAR_ICON_COLORS: Record<string, { header: string; dots: string }> = {
+  red: { header: "#cf5659", dots: "#f3aab9" },
+  blue: { header: "#4f7edb", dots: "#a8c4f6" },
+  green: { header: "#3f9a67", dots: "#9ddfbb" },
+  purple: { header: "#7861cf", dots: "#c5b8fb" },
+  gray: { header: "#64748b", dots: "#cbd5e1" },
+};
+
+function parseCalendarIconDate(value: string | null): Date {
+  const raw = String(value || "").trim();
+  const compact = raw.replace(/\D/g, "");
+  if (/^\d{8}$/.test(compact)) {
+    const year = Number(compact.slice(0, 4));
+    const month = Number(compact.slice(4, 6));
+    const day = Number(compact.slice(6, 8));
+    const parsed = new Date(year, month - 1, day);
+    if (
+      parsed.getFullYear() === year &&
+      parsed.getMonth() === month - 1 &&
+      parsed.getDate() === day
+    ) {
+      return parsed;
+    }
+  }
+  return new Date();
+}
+
+function renderCalendarIconSvg(date: Date, colorName: string, locale: string, showWeekday: boolean): string {
+  const color = CALENDAR_ICON_COLORS[colorName] || CALENDAR_ICON_COLORS.red;
+  const monthNamesCn = ["一月", "二月", "三月", "四月", "五月", "六月", "七月", "八月", "九月", "十月", "十一月", "十二月"];
+  const weekdayNamesCn = ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"];
+  const monthNamesEn = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const weekdayNamesEn = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+  const isEnglish = locale === "en";
+  const monthLabel = isEnglish ? monthNamesEn[date.getMonth()] : monthNamesCn[date.getMonth()];
+  const weekdayLabel = isEnglish ? weekdayNamesEn[date.getDay()] : weekdayNamesCn[date.getDay()];
+  const dayLabel = String(date.getDate());
+  const monthFontSize = isEnglish ? 108 : 100;
+  const weekdayFontSize = isEnglish ? 58 : 64;
+  const dayY = showWeekday ? 400 : 430;
+  const weekdayText = showWeekday
+    ? `<text x="256" y="480" fill="#66757f" font-family="-apple-system, BlinkMacSystemFont, 'Noto Sans', 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif, 'Segoe UI', Roboto, 'Helvetica Neue', Arial" font-size="${weekdayFontSize}px" text-anchor="middle">${weekdayLabel}</text>`
+    : "";
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" aria-label="Calendar" role="img" viewBox="0 0 512 512" width="100%" height="100%">
+  <path d="m512,455c0,32 -25,57 -57,57l-398,0c-32,0 -57,-25 -57,-57l0,-327c0,-31 25,-57 57,-57l398,0c32,0 57,26 57,57l0,327z" fill="#efefef"/>
+  <path d="m484,0l-47,0l-409,0c-15,0 -28,13 -28,28l0,157l512,0l0,-157c0,-15 -13,-28 -28,-28z" fill="${color.header}"/>
+  <g fill="${color.dots}">
+    <circle cx="462" cy="136" r="14"/>
+    <circle cx="462" cy="94" r="14"/>
+    <circle cx="419" cy="136" r="14"/>
+    <circle cx="419" cy="94" r="14"/>
+    <circle cx="376" cy="136" r="14"/>
+    <circle cx="376" cy="94" r="14"/>
+  </g>
+  <text x="32" y="142" fill="#fff" font-family="-apple-system, BlinkMacSystemFont, 'Noto Sans', 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif, 'Segoe UI', Roboto, 'Helvetica Neue', Arial" font-size="${monthFontSize}px">${monthLabel}</text>
+  <text x="256" y="${dayY}" fill="#66757f" font-family="-apple-system, BlinkMacSystemFont, 'Noto Sans', 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif, 'Segoe UI', Roboto, 'Helvetica Neue', Arial" font-size="256px" text-anchor="middle">${dayLabel}</text>
+  ${weekdayText}
+</svg>`;
+}
+
 const server = http.createServer((req, res) => {
   const parsedUrl = new URL(req.url || "/", "http://localhost");
   const pathname = parsedUrl.pathname;
+
+  // ---- /api/icon/calendar: 参数化日历 SVG 图标 ----
+  if (pathname === "/api/icon/calendar") {
+    const date = parseCalendarIconDate(parsedUrl.searchParams.get("date"));
+    const color = parsedUrl.searchParams.get("color") || "red";
+    const locale = parsedUrl.searchParams.get("locale") === "en" ? "en" : "cn";
+    const showWeekday = !["0", "false"].includes(parsedUrl.searchParams.get("weekday") || "");
+    const hasFixedDate = Boolean(parsedUrl.searchParams.get("date"));
+
+    res.writeHead(200, {
+      "Content-Type": "image/svg+xml; charset=utf-8",
+      "Cache-Control": hasFixedDate ? "public, max-age=31536000, immutable" : "no-cache",
+    });
+    res.end(renderCalendarIconSvg(date, color, locale, showWeekday));
+    return;
+  }
 
   // ---- /api/public: 公开安全数据（无 trades） ----
   if (pathname === "/api/public") {
