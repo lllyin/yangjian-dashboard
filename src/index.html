@@ -64,14 +64,29 @@
       </section>
       <p id="data-updated-at" class="updated-at">Data updated at -</p>
 
+      <section id="today-market-comparison" class="market-comparison glass-card" style="display: none;">
+        <div class="market-comparison-heading">
+          <h2 class="text-sm font-semibold">当日大盘</h2>
+          <span id="today-market-comparison-date" class="market-comparison-range"></span>
+        </div>
+        <div id="today-market-comparison-items" class="market-comparison-items"></div>
+      </section>
+
+      <div class="period-performance-group">
       <!-- Key Performance Indicators -->
-      <section class="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <section class="period-kpi-grid grid grid-cols-1 md:grid-cols-3 gap-6">
         <div class="kpi-card glass-card clickable flex items-center gap-5" id="kpi-pnl-card">
           <div class="card-icon">💰</div>
           <div class="card-info">
             <h3 class="text-xs text-gray-400 font-medium uppercase tracking-wider mb-1">区间盈亏</h3>
-            <div class="value positive text-2xl font-bold" id="kpi-pnl">+0.00 元</div>
+            <div class="value positive text-2xl font-bold" id="kpi-pnl">+0.00</div>
           </div>
+        </div>
+
+        <div class="mobile-card-link" aria-hidden="true">
+          <svg viewBox="0 0 24 24">
+            <path d="M15 7h3a5 5 0 0 1 0 10h-3M9 17H6A5 5 0 0 1 6 7h3M8 12h8"/>
+          </svg>
         </div>
 
         <div class="kpi-card glass-card clickable flex items-center gap-5" id="kpi-rate-card">
@@ -82,14 +97,20 @@
           </div>
         </div>
 
+        <div class="mobile-card-link" aria-hidden="true">
+          <svg viewBox="0 0 24 24">
+            <path d="M15 7h3a5 5 0 0 1 0 10h-3M9 17H6A5 5 0 0 1 6 7h3M8 12h8"/>
+          </svg>
+        </div>
+
         <div class="kpi-card glass-card flex items-center gap-5">
           <div class="card-icon">🏦</div>
           <div class="card-info">
             <h3 class="text-xs text-gray-400 font-medium uppercase tracking-wider mb-1">期初资产 / 期末资产</h3>
             <div class="double-value flex items-center gap-2 text-lg font-semibold">
-              <span id="kpi-basis-asset">0.00 元</span>
+              <span id="kpi-basis-asset">0.00</span>
               <span class="separator text-gray-500">→</span>
-              <span id="kpi-end-asset">0.00 元</span>
+              <span id="kpi-end-asset">0.00</span>
             </div>
             <div id="kpi-net-deposits-row" class="text-xs text-gray-500 mt-1" style="display:none">
               <span>净入金</span>
@@ -97,7 +118,31 @@
             </div>
           </div>
         </div>
+
+        <div class="mobile-card-link" aria-hidden="true">
+          <svg viewBox="0 0 24 24">
+            <path d="M15 7h3a5 5 0 0 1 0 10h-3M9 17H6A5 5 0 0 1 6 7h3M8 12h8"/>
+          </svg>
+        </div>
       </section>
+
+      <div class="period-card-link" aria-hidden="true">
+        <span class="period-card-link-node">
+          <svg viewBox="0 0 24 24">
+            <path d="M15 7h3a5 5 0 0 1 0 10h-3M9 17H6A5 5 0 0 1 6 7h3M8 12h8"/>
+          </svg>
+        </span>
+        <span class="period-card-link-node">
+          <svg viewBox="0 0 24 24">
+            <path d="M15 7h3a5 5 0 0 1 0 10h-3M9 17H6A5 5 0 0 1 6 7h3M8 12h8"/>
+          </svg>
+        </span>
+        <span class="period-card-link-node">
+          <svg viewBox="0 0 24 24">
+            <path d="M15 7h3a5 5 0 0 1 0 10h-3M9 17H6A5 5 0 0 1 6 7h3M8 12h8"/>
+          </svg>
+        </span>
+      </div>
 
       <section id="market-comparison" class="market-comparison glass-card" style="display: none;">
         <div class="market-comparison-heading">
@@ -106,6 +151,7 @@
         </div>
         <div id="market-comparison-items" class="market-comparison-items"></div>
       </section>
+      </div>
 
       <!-- Chart Visualization -->
       <section class="chart-section glass-card">

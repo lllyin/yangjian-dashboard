@@ -15,6 +15,9 @@ const kpiRate = document.getElementById("kpi-rate");
 const kpiBasisAsset = document.getElementById("kpi-basis-asset");
 const kpiEndAsset = document.getElementById("kpi-end-asset");
 const kpiNetDeposits = document.getElementById("kpi-net-deposits");
+const todayMarketComparison = document.getElementById("today-market-comparison");
+const todayMarketComparisonDate = document.getElementById("today-market-comparison-date");
+const todayMarketComparisonItems = document.getElementById("today-market-comparison-items");
 const marketComparison = document.getElementById("market-comparison");
 const marketComparisonRange = document.getElementById("market-comparison-range");
 const marketComparisonItems = document.getElementById("market-comparison-items");
@@ -173,10 +176,12 @@ function clearDisplay() {
   if (dataUpdatedAt) {
     dataUpdatedAt.textContent = "Data updated at -";
   }
-  kpiPnl.textContent = "0.00 元";
+  kpiPnl.textContent = "0.00";
   kpiRate.textContent = "0.00%";
-  kpiBasisAsset.textContent = "0.00 元";
-  kpiEndAsset.textContent = "0.00 元";
+  kpiBasisAsset.textContent = "0.00";
+  kpiEndAsset.textContent = "0.00";
+  if (todayMarketComparison) todayMarketComparison.style.display = "none";
+  if (marketComparison) marketComparison.style.display = "none";
   detailsTbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-muted);">暂无明细数据</td></tr>`;
   tradesSection.style.display = "none";
   tradesContainer.innerHTML = "";
@@ -212,15 +217,17 @@ function displaySelectedPeriod() {
   const item = list.find((i) => i.label === selectedLabel);
   if (!item) return;
 
+  renderTodayMarketComparison(apiData.todayMarket);
+
   // 1. Update KPI summaries
-  kpiPnl.textContent = `${formatPnlSign(item.pnl)} 元`;
+  kpiPnl.textContent = formatPnlSign(item.pnl);
   kpiPnl.className = `value ${item.pnl >= 0 ? "positive" : "negative"}`;
   
   kpiRate.textContent = `${item.pnl >= 0 ? "+" : ""}${(item.pnlRate * 100).toFixed(2)}%`;
   kpiRate.className = `value ${item.pnlRate >= 0 ? "positive" : "negative"}`;
 
-  kpiBasisAsset.textContent = `${formatMoney(item.basisAsset)} 元`;
-  kpiEndAsset.textContent = `${formatMoney(item.endAsset)} 元`;
+  kpiBasisAsset.textContent = formatMoney(item.basisAsset);
+  kpiEndAsset.textContent = formatMoney(item.endAsset);
 
   if (kpiNetDeposits) {
     const netDeposits = item.netDeposits ?? 0;
@@ -429,30 +436,74 @@ function displaySelectedPeriod() {
 }
 
 function renderMarketComparison(benchmarks) {
-  if (!marketComparison || !marketComparisonItems || !Array.isArray(benchmarks) || benchmarks.length === 0) {
-    if (marketComparison) marketComparison.style.display = "none";
-    return;
-  }
+  renderBenchmarkCard({
+    container: marketComparison,
+    items: marketComparisonItems,
+    range: marketComparisonRange,
+    benchmarks,
+    rangeText: (first) => `${formatYmd(first.basisDate)} → ${formatYmd(first.endDate)}`,
+  });
 
-  marketComparison.style.display = "block";
-  marketComparisonItems.innerHTML = benchmarks.map((benchmark) => {
-    const positive = benchmark.returnRate >= 0;
-    const rate = `${positive ? "+" : ""}${(benchmark.returnRate * 100).toFixed(2)}%`;
-    return `
-      <div class="market-comparison-item">
-        <span class="market-comparison-name">${escapeHtml(benchmark.name)}</span>
-        <span class="market-comparison-rate ${positive ? "positive" : "negative"}">${rate}</span>
-      </div>
-    `;
-  }).join("");
-
-  if (marketComparisonRange) {
+  if (marketComparisonRange && Array.isArray(benchmarks) && benchmarks.length > 0) {
     const first = benchmarks[0];
-    marketComparisonRange.textContent = `${formatYmd(first.basisDate)} → ${formatYmd(first.endDate)}`;
     marketComparisonRange.title = first.basisSource === "derived_previous_close"
       ? "期初基准由首日行情的当日涨幅反推昨日收盘价"
       : "期初基准取首个交易日前一交易日的最后市场快照";
   }
+}
+
+function renderTodayMarketComparison(todayMarket) {
+  const shouldDisplay = activePeriod === "weekly"
+    && periodSelector.value === todayMarket?.weekLabel;
+  if (!shouldDisplay) {
+    if (todayMarketComparison) todayMarketComparison.style.display = "none";
+    return;
+  }
+
+  renderBenchmarkCard({
+    container: todayMarketComparison,
+    items: todayMarketComparisonItems,
+    range: todayMarketComparisonDate,
+    benchmarks: todayMarket?.benchmarks,
+    rangeText: () => formatYmd(todayMarket.date),
+    showPoint: true,
+  });
+}
+
+function renderBenchmarkCard({ container, items, range, benchmarks, rangeText, showPoint = false }) {
+  if (!container || !items || !Array.isArray(benchmarks) || benchmarks.length === 0) {
+    if (container) container.style.display = "none";
+    return;
+  }
+
+  container.style.display = "block";
+  items.innerHTML = benchmarks.map((benchmark) => {
+    const positive = benchmark.returnRate >= 0;
+    const rate = `${positive ? "+" : ""}${(benchmark.returnRate * 100).toFixed(2)}%`;
+    const directionClass = positive ? "positive" : "negative";
+    return `
+      <div class="market-comparison-item">
+        <span class="market-comparison-name">${escapeHtml(benchmark.name)}</span>
+        ${showPoint
+          ? `<span class="market-comparison-quote ${directionClass}">
+              <span class="market-comparison-point">${formatIndexPoint(benchmark.endPrice)}</span>
+              <span class="market-comparison-rate">${rate}</span>
+            </span>`
+          : `<span class="market-comparison-rate ${directionClass}">${rate}</span>`}
+      </div>
+    `;
+  }).join("");
+
+  if (range) {
+    range.textContent = rangeText(benchmarks[0]);
+  }
+}
+
+function formatIndexPoint(value) {
+  return Number(value).toLocaleString("zh-CN", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 }
 
 function escapeHtml(value) {

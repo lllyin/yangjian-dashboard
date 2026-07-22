@@ -5,6 +5,8 @@ import crypto from "node:crypto";
 import {
   calculateAccountReturns,
   calculateMarketReturns,
+  DEFAULT_HOLIDAY_CALENDAR_DIR,
+  findTradingDateOnOrBefore,
   parseTradesMarkdown,
   type MarketBenchmarkReturn,
   type ParsedTrade,
@@ -74,6 +76,12 @@ interface PeriodSummary {
   updatedAt?: string;
 }
 
+interface TodayMarketSummary {
+  date: string;
+  weekLabel: string;
+  benchmarks: MarketBenchmarkReturn[];
+}
+
 function calculatePeriodBenchmarks(startDate: string, endDate: string): MarketBenchmarkReturn[] {
   try {
     return calculateMarketReturns({
@@ -87,6 +95,41 @@ function calculatePeriodBenchmarks(startDate: string, endDate: string): MarketBe
     );
     return [];
   }
+}
+
+function calculateTodayMarket(): TodayMarketSummary {
+  const today = todayYmdInShanghai();
+  const date = findTradingDateOnOrBefore(today, DEFAULT_HOLIDAY_CALENDAR_DIR);
+  return {
+    date,
+    weekLabel: isoWeekLabel(today),
+    benchmarks: calculatePeriodBenchmarks(date, date),
+  };
+}
+
+function todayYmdInShanghai(now = new Date()): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(now);
+  const value = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${value.year}${value.month}${value.day}`;
+}
+
+function isoWeekLabel(value: string): string {
+  const date = new Date(Date.UTC(
+    Number(value.slice(0, 4)),
+    Number(value.slice(4, 6)) - 1,
+    Number(value.slice(6, 8)),
+  ));
+  const weekday = date.getUTCDay() || 7;
+  date.setUTCDate(date.getUTCDate() + 4 - weekday);
+  const isoYear = date.getUTCFullYear();
+  const yearStart = new Date(Date.UTC(isoYear, 0, 1));
+  const week = Math.ceil(((date.getTime() - yearStart.getTime()) / 86_400_000 + 1) / 7);
+  return `${isoYear}-W${String(week).padStart(2, "0")}`;
 }
 
 // Helper to load configurations
@@ -643,9 +686,10 @@ const server = http.createServer((req, res) => {
       const weekly = maskTradePrices(computeWeekly(records));
       const monthly = maskTradePrices(computeMonthly(records));
       const yearly = maskTradePrices(computeYearly(records));
+      const todayMarket = calculateTodayMarket();
 
       res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-      res.end(JSON.stringify({ weekly, monthly, yearly, theme: config.theme }));
+      res.end(JSON.stringify({ todayMarket, weekly, monthly, yearly, theme: config.theme }));
     } catch {
       res.writeHead(500, { "Content-Type": "application/json; charset=utf-8" });
       res.end(JSON.stringify({ error: "内部错误" }));
@@ -666,9 +710,10 @@ const server = http.createServer((req, res) => {
       const weekly = computeWeekly(records);
       const monthly = computeMonthly(records);
       const yearly = computeYearly(records);
+      const todayMarket = calculateTodayMarket();
 
       res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-      res.end(JSON.stringify({ weekly, monthly, yearly, theme: config.theme }));
+      res.end(JSON.stringify({ todayMarket, weekly, monthly, yearly, theme: config.theme }));
     } catch {
       res.writeHead(500, { "Content-Type": "application/json; charset=utf-8" });
       res.end(JSON.stringify({ error: "内部错误" }));
