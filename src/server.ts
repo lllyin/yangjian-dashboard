@@ -2,7 +2,13 @@ import fs from "node:fs";
 import path from "node:path";
 import http from "node:http";
 import crypto from "node:crypto";
-import { calculateAccountReturns, parseTradesMarkdown, type ParsedTrade } from "yangjian/calculation";
+import {
+  calculateAccountReturns,
+  calculateMarketReturns,
+  parseTradesMarkdown,
+  type MarketBenchmarkReturn,
+  type ParsedTrade,
+} from "yangjian/calculation";
 
 interface Config {
   startWeek?: string;
@@ -61,10 +67,26 @@ interface PeriodSummary {
   basisAsset: number;
   netDeposits: number;
   endAsset: number;
+  benchmarks: MarketBenchmarkReturn[];
   days: DailyRecord[];
   trades?: TradeRecord[]; // Only for weekly summaries
   hasRebuiltData?: boolean; // 区间内是否包含 rebuilt 重建数据
   updatedAt?: string;
+}
+
+function calculatePeriodBenchmarks(startDate: string, endDate: string): MarketBenchmarkReturn[] {
+  try {
+    return calculateMarketReturns({
+      journalDir: path.join(resolveYangjianRoot(), "journal"),
+      startDate,
+      endDate,
+    }).benchmarks;
+  } catch (error) {
+    console.warn(
+      `[market returns] ${startDate}-${endDate}: ${error instanceof Error ? error.message : String(error)}`,
+    );
+    return [];
+  }
 }
 
 // Helper to load configurations
@@ -355,6 +377,7 @@ function computeWeekly(records: DailyRecord[]): PeriodSummary[] {
       basisAsset: Math.round(basisAsset * 100) / 100,
       netDeposits: Math.round(netDeposits * 100) / 100,
       endAsset: Math.round(endAsset * 100) / 100,
+      benchmarks: calculatePeriodBenchmarks(firstDay, lastDay),
       days,
       trades,
       hasRebuiltData: days.some((d) => d.source === "rebuilt"),
@@ -420,6 +443,7 @@ function computeMonthly(records: DailyRecord[]): PeriodSummary[] {
       basisAsset: Math.round(basisAsset * 100) / 100,
       netDeposits: Math.round(netDeposits * 100) / 100,
       endAsset: Math.round(endAsset * 100) / 100,
+      benchmarks: calculatePeriodBenchmarks(firstDay, lastDay),
       days,
       hasRebuiltData: days.some((d) => d.source === "rebuilt"),
       updatedAt: getLatestUpdatedAt(days),
@@ -484,6 +508,7 @@ function computeYearly(records: DailyRecord[]): PeriodSummary[] {
       basisAsset: Math.round(basisAsset * 100) / 100,
       netDeposits: Math.round(netDeposits * 100) / 100,
       endAsset: Math.round(endAsset * 100) / 100,
+      benchmarks: calculatePeriodBenchmarks(firstDay, lastDay),
       days,
       hasRebuiltData: days.some((d) => d.source === "rebuilt"),
       updatedAt: getLatestUpdatedAt(days),

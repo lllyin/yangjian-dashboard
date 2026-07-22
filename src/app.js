@@ -15,6 +15,9 @@ const kpiRate = document.getElementById("kpi-rate");
 const kpiBasisAsset = document.getElementById("kpi-basis-asset");
 const kpiEndAsset = document.getElementById("kpi-end-asset");
 const kpiNetDeposits = document.getElementById("kpi-net-deposits");
+const marketComparison = document.getElementById("market-comparison");
+const marketComparisonRange = document.getElementById("market-comparison-range");
+const marketComparisonItems = document.getElementById("market-comparison-items");
 const detailsTbody = document.getElementById("details-tbody");
 const tradesSection = document.getElementById("trades-section");
 const tradesContainer = document.getElementById("trades-container");
@@ -228,6 +231,8 @@ function displaySelectedPeriod() {
     kpiNetDeposits.textContent = `${formatPnlSign(netDeposits)} 元`;
   }
 
+  renderMarketComparison(item.benchmarks);
+
   // 2. Update date ranges badge
   if (item.days && item.days.length > 0) {
     const start = formatYmd(item.days[0].date);
@@ -421,6 +426,42 @@ function displaySelectedPeriod() {
   } else {
     tradesSection.style.display = "none";
   }
+}
+
+function renderMarketComparison(benchmarks) {
+  if (!marketComparison || !marketComparisonItems || !Array.isArray(benchmarks) || benchmarks.length === 0) {
+    if (marketComparison) marketComparison.style.display = "none";
+    return;
+  }
+
+  marketComparison.style.display = "block";
+  marketComparisonItems.innerHTML = benchmarks.map((benchmark) => {
+    const positive = benchmark.returnRate >= 0;
+    const rate = `${positive ? "+" : ""}${(benchmark.returnRate * 100).toFixed(2)}%`;
+    return `
+      <div class="market-comparison-item">
+        <span class="market-comparison-name">${escapeHtml(benchmark.name)}</span>
+        <span class="market-comparison-rate ${positive ? "positive" : "negative"}">${rate}</span>
+      </div>
+    `;
+  }).join("");
+
+  if (marketComparisonRange) {
+    const first = benchmarks[0];
+    marketComparisonRange.textContent = `${formatYmd(first.basisDate)} → ${formatYmd(first.endDate)}`;
+    marketComparisonRange.title = first.basisSource === "derived_previous_close"
+      ? "期初基准由首日行情的当日涨幅反推昨日收盘价"
+      : "期初基准取首个交易日前一交易日的最后市场快照";
+  }
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
 }
 
 function setupIntradayModal() {
