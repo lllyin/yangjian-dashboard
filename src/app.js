@@ -441,7 +441,10 @@ function renderMarketComparison(benchmarks) {
     items: marketComparisonItems,
     range: marketComparisonRange,
     benchmarks,
-    rangeText: (first) => `${formatYmd(first.basisDate)} → ${formatYmd(first.endDate)}`,
+    rangeDates: (first) => ({
+      start: formatYmd(first.basisDate),
+      end: formatYmd(first.endDate),
+    }),
   });
 
   if (marketComparisonRange && Array.isArray(benchmarks) && benchmarks.length > 0) {
@@ -470,7 +473,7 @@ function renderTodayMarketComparison(todayMarket) {
   });
 }
 
-function renderBenchmarkCard({ container, items, range, benchmarks, rangeText, showPoint = false }) {
+function renderBenchmarkCard({ container, items, range, benchmarks, rangeText, rangeDates, showPoint = false }) {
   if (!container || !items || !Array.isArray(benchmarks) || benchmarks.length === 0) {
     if (container) container.style.display = "none";
     return;
@@ -495,7 +498,16 @@ function renderBenchmarkCard({ container, items, range, benchmarks, rangeText, s
   }).join("");
 
   if (range) {
-    range.textContent = rangeText(benchmarks[0]);
+    if (rangeDates) {
+      const { start, end } = rangeDates(benchmarks[0]);
+      range.innerHTML = `
+        <span>${escapeHtml(start)}</span>
+        <span class="market-comparison-range-separator" aria-hidden="true">~</span>
+        <span>${escapeHtml(end)}</span>
+      `;
+    } else {
+      range.textContent = rangeText(benchmarks[0]);
+    }
   }
 }
 
