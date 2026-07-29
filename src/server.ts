@@ -9,8 +9,10 @@ import {
   findTradingDateOnOrBefore,
   parseTradesMarkdown,
   type MarketBenchmarkReturn,
-  type ParsedTrade,
 } from "yangjian/calculation";
+
+const DASHBOARD_SOURCE_DIR = path.join(__dirname, "../../src");
+const DASHBOARD_CONFIG_PATH = path.join(DASHBOARD_SOURCE_DIR, "config.json");
 
 interface Config {
   startWeek?: string;
@@ -82,6 +84,25 @@ interface TodayMarketSummary {
   benchmarks: MarketBenchmarkReturn[];
 }
 
+interface DashboardPayload {
+  todayMarket: TodayMarketSummary;
+  weekly: PeriodSummary[];
+  monthly: PeriodSummary[];
+  yearly: PeriodSummary[];
+  theme?: Config["theme"];
+}
+
+interface DashboardDataCache {
+  sourceFingerprint: string;
+  fullJson: string;
+  publicJson: string;
+}
+
+interface SourceFingerprintMemo {
+  checkedAt: number;
+  value: string;
+}
+
 function calculatePeriodBenchmarks(startDate: string, endDate: string): MarketBenchmarkReturn[] {
   try {
     return calculateMarketReturns({
@@ -90,9 +111,7 @@ function calculatePeriodBenchmarks(startDate: string, endDate: string): MarketBe
       endDate,
     }).benchmarks;
   } catch (error) {
-    console.warn(
-      `[market returns] ${startDate}-${endDate}: ${error instanceof Error ? error.message : String(error)}`,
-    );
+    console.warn(`[market returns] calculation failed for ${startDate}-${endDate}`);
     return [];
   }
 }
@@ -134,12 +153,10 @@ function isoWeekLabel(value: string): string {
 
 // Helper to load configurations
 function loadConfig(): Config {
-  // dist/src/server.js → ../../src/config.json
-  const configPath = path.join(__dirname, "../../src/config.json");
-  if (!fs.existsSync(configPath)) {
-    throw new Error(`Config file not found at ${configPath}`);
+  if (!fs.existsSync(DASHBOARD_CONFIG_PATH)) {
+    throw new Error("Dashboard config file not found");
   }
-  return JSON.parse(fs.readFileSync(configPath, "utf8")) as Config;
+  return JSON.parse(fs.readFileSync(DASHBOARD_CONFIG_PATH, "utf8")) as Config;
 }
 
 // Helpers for money parsing
@@ -222,7 +239,7 @@ function parseTradesForWeek(yangjianRoot: string, weekName: string): TradeRecord
       }
     } catch (e) {
       // Ignore parsing errors
-      console.error(`Error parsing trades for ${dateName}:`, e);
+      console.error(`[trades] parsing failed for ${dateName}`);
     }
   }
 
@@ -371,7 +388,6 @@ function computeWeekly(records: DailyRecord[]): PeriodSummary[] {
     groups[r.weekName].push(r);
   }
 
-  const config = loadConfig();
   const summaries: PeriodSummary[] = [];
   const sortedWeeks = Object.keys(groups).sort();
 
@@ -440,7 +456,6 @@ function computeMonthly(records: DailyRecord[]): PeriodSummary[] {
     groups[month].push(r);
   }
 
-  const config = loadConfig();
   const summaries: PeriodSummary[] = [];
   const sortedMonths = Object.keys(groups).sort();
 
@@ -505,7 +520,6 @@ function computeYearly(records: DailyRecord[]): PeriodSummary[] {
     groups[year].push(r);
   }
 
-  const config = loadConfig();
   const summaries: PeriodSummary[] = [];
   const sortedYears = Object.keys(groups).sort();
 
@@ -573,7 +587,13 @@ function computeYearly(records: DailyRecord[]): PeriodSummary[] {
 const PORT = Number(process.env.PORT) || 3000;
 const AUTH_TOKEN = process.env.AUTH_TOKEN || "";
 const HOST = process.env.DASHBOARD_HOST || "127.0.0.1";
-const DASHBOARD_SOURCE_DIR = path.join(__dirname, "../../src");
+const SOURCE_CHECK_INTERVAL_MS = parseBoundedInteger(
+  process.env.DATA_SOURCE_CHECK_INTERVAL_MS,
+  1_000,
+  250,
+  60_000,
+);
+const EXPOSE_CACHE_STATUS = process.env.DASHBOARD_CACHE_DEBUG === "1";
 const STATIC_ASSET_VERSION = crypto
   .createHash("sha256")
   .update(fs.readFileSync(path.join(DASHBOARD_SOURCE_DIR, "app.js")))
@@ -589,12 +609,192 @@ function maskTradePrices(periods: PeriodSummary[]): PeriodSummary[] {
   }));
 }
 
+function parseBoundedInteger(
+  rawValue: string | undefined,
+  fallback: number,
+  minimum: number,
+  maximum: number,
+): number {
+  const parsed = Number(rawValue);
+  if (!Number.isInteger(parsed) || parsed < minimum || parsed > maximum) {
+    return fallback;
+  }
+  return parsed;
+}
+
+function updateFingerprintWithFile(
+  hash: crypto.Hash,
+  filePath: string,
+  publicLabel: string,
+): void {
+  if (!fs.existsSync(filePath)) {
+    hash.update(`missing:${publicLabel}\0`);
+    return;
+  }
+
+  const stat = fs.statSync(filePath, { bigint: true });
+  hash.update(
+    `file:${publicLabel}:${stat.size.toString()}:${stat.mtimeNs.toString()}\0`,
+  );
+}
+
+/**
+ * 将目录内文件的相对路径和元数据加入指纹。
+ * 不读取文件内容、不跟随符号链接，也不把机器绝对路径写入缓存或响应。
+ */
+function updateFingerprintWithTree(
+  hash: crypto.Hash,
+  rootDir: string,
+  publicLabel: string,
+): void {
+  if (!fs.existsSync(rootDir)) {
+    hash.update(`missing-tree:${publicLabel}\0`);
+    return;
+  }
+
+  const visit = (currentDir: string, relativeDir: string): void => {
+    const entries = fs
+      .readdirSync(currentDir, { withFileTypes: true })
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+    for (const entry of entries) {
+      const absolutePath = path.join(currentDir, entry.name);
+      const relativePath = relativeDir
+        ? `${relativeDir}/${entry.name}`
+        : entry.name;
+
+      if (entry.isDirectory()) {
+        visit(absolutePath, relativePath);
+        continue;
+      }
+
+      if (entry.isFile()) {
+        const stat = fs.statSync(absolutePath, { bigint: true });
+        hash.update(
+          `file:${publicLabel}/${relativePath}:${stat.size.toString()}:${stat.mtimeNs.toString()}\0`,
+        );
+        continue;
+      }
+
+      // 数据目录不应依赖符号链接；仅记录链接自身元数据，避免遍历到项目外部。
+      const stat = fs.lstatSync(absolutePath, { bigint: true });
+      hash.update(
+        `other:${publicLabel}/${relativePath}:${stat.size.toString()}:${stat.mtimeNs.toString()}\0`,
+      );
+    }
+  };
+
+  visit(rootDir, "");
+}
+
+let dashboardDataCache: DashboardDataCache | null = null;
+let sourceFingerprintMemo: SourceFingerprintMemo | null = null;
+
+function calculateSourceFingerprint(): string {
+  const now = Date.now();
+  if (
+    sourceFingerprintMemo
+    && now - sourceFingerprintMemo.checkedAt < SOURCE_CHECK_INTERVAL_MS
+  ) {
+    return sourceFingerprintMemo.value;
+  }
+
+  const yangjianRoot = resolveYangjianRoot();
+  const hash = crypto.createHash("sha256");
+  hash.update(`dashboard-data-v1\0day:${todayYmdInShanghai()}\0`);
+  updateFingerprintWithFile(hash, DASHBOARD_CONFIG_PATH, "dashboard-config");
+  updateFingerprintWithTree(hash, path.join(yangjianRoot, "journal"), "journal");
+  updateFingerprintWithTree(hash, path.join(yangjianRoot, "trades"), "trades");
+  updateFingerprintWithFile(
+    hash,
+    path.join(yangjianRoot, "account", "cash_flow.md"),
+    "account-cash-flow",
+  );
+  updateFingerprintWithTree(hash, DEFAULT_HOLIDAY_CALENDAR_DIR, "holiday-calendar");
+
+  const value = hash.digest("hex");
+  sourceFingerprintMemo = { checkedAt: now, value };
+  return value;
+}
+
+function buildDashboardPayload(): DashboardPayload {
+  const config = loadConfig();
+  const records = scanJournalData(resolveYangjianRoot());
+  return {
+    todayMarket: calculateTodayMarket(),
+    weekly: computeWeekly(records),
+    monthly: computeMonthly(records),
+    yearly: computeYearly(records),
+    theme: config.theme,
+  };
+}
+
+function getDashboardDataCache(): { cache: DashboardDataCache; hit: boolean } {
+  const sourceFingerprint = calculateSourceFingerprint();
+  if (
+    dashboardDataCache
+    && dashboardDataCache.sourceFingerprint === sourceFingerprint
+  ) {
+    return { cache: dashboardDataCache, hit: true };
+  }
+
+  const fullPayload = buildDashboardPayload();
+  const publicPayload: DashboardPayload = {
+    ...fullPayload,
+    weekly: maskTradePrices(fullPayload.weekly),
+    monthly: maskTradePrices(fullPayload.monthly),
+    yearly: maskTradePrices(fullPayload.yearly),
+  };
+
+  const cache: DashboardDataCache = {
+    sourceFingerprint,
+    fullJson: JSON.stringify(fullPayload),
+    publicJson: JSON.stringify(publicPayload),
+  };
+  dashboardDataCache = cache;
+  return { cache, hit: false };
+}
+
+function sendDashboardJson(
+  res: http.ServerResponse,
+  json: string,
+  cacheHit: boolean,
+): void {
+  const headers: http.OutgoingHttpHeaders = {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "private, no-store",
+    "X-Content-Type-Options": "nosniff",
+  };
+  if (EXPOSE_CACHE_STATUS) {
+    headers["X-Data-Cache"] = cacheHit ? "HIT" : "MISS";
+  }
+  res.writeHead(200, headers);
+  res.end(json);
+}
+
+function sendApiError(
+  res: http.ServerResponse,
+  statusCode: number,
+  message: string,
+): void {
+  res.writeHead(statusCode, {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    "X-Content-Type-Options": "nosniff",
+  });
+  res.end(JSON.stringify({ error: message }));
+}
+
 /** 检查请求是否持有有效 token */
 function isAuthorizedToken(req: http.IncomingMessage): boolean {
   if (!AUTH_TOKEN) return false;
   const url = new URL(req.url || "/", "http://localhost");
-  const tokenParam = url.searchParams.get("auth_token") || "";
-  return tokenParam === AUTH_TOKEN;
+  const authorization = req.headers.authorization || "";
+  const bearerToken = authorization.match(/^Bearer\s+(.+)$/i)?.[1]?.trim() || "";
+  const candidate = bearerToken || url.searchParams.get("auth_token") || "";
+  const expectedDigest = crypto.createHash("sha256").update(AUTH_TOKEN).digest();
+  const candidateDigest = crypto.createHash("sha256").update(candidate).digest();
+  return crypto.timingSafeEqual(expectedDigest, candidateDigest);
 }
 
 const CALENDAR_ICON_COLORS: Record<string, { header: string; dots: string }> = {
@@ -678,21 +878,13 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  // ---- /api/public: 公开安全数据（无 trades） ----
+  // ---- /api/public: 公开安全数据（保留交易明细，隐藏买入卖出价格） ----
   if (pathname === "/api/public") {
     try {
-      const config = loadConfig();
-      const records = scanJournalData(resolveYangjianRoot());
-      const weekly = maskTradePrices(computeWeekly(records));
-      const monthly = maskTradePrices(computeMonthly(records));
-      const yearly = maskTradePrices(computeYearly(records));
-      const todayMarket = calculateTodayMarket();
-
-      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-      res.end(JSON.stringify({ todayMarket, weekly, monthly, yearly, theme: config.theme }));
+      const { cache, hit } = getDashboardDataCache();
+      sendDashboardJson(res, cache.publicJson, hit);
     } catch {
-      res.writeHead(500, { "Content-Type": "application/json; charset=utf-8" });
-      res.end(JSON.stringify({ error: "内部错误" }));
+      sendApiError(res, 500, "内部错误");
     }
     return;
   }
@@ -700,33 +892,27 @@ const server = http.createServer((req, res) => {
   // ---- /api/data: 完整数据，需 token 认证 ----
   if (pathname === "/api/data") {
     if (!isAuthorizedToken(req)) {
-      res.writeHead(403, { "Content-Type": "application/json; charset=utf-8" });
-      res.end(JSON.stringify({ error: "需要认证" }));
+      sendApiError(res, 403, "需要认证");
       return;
     }
     try {
-      const config = loadConfig();
-      const records = scanJournalData(resolveYangjianRoot());
-      const weekly = computeWeekly(records);
-      const monthly = computeMonthly(records);
-      const yearly = computeYearly(records);
-      const todayMarket = calculateTodayMarket();
-
-      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-      res.end(JSON.stringify({ todayMarket, weekly, monthly, yearly, theme: config.theme }));
+      const { cache, hit } = getDashboardDataCache();
+      sendDashboardJson(res, cache.fullJson, hit);
     } catch {
-      res.writeHead(500, { "Content-Type": "application/json; charset=utf-8" });
-      res.end(JSON.stringify({ error: "内部错误" }));
+      sendApiError(res, 500, "内部错误");
     }
     return;
   }
 
   // ---- 静态文件 ----
   const cleanUrl = pathname === "/" ? "index.html" : pathname.slice(1);
-  const filePath = path.join(DASHBOARD_SOURCE_DIR, cleanUrl);
+  const filePath = path.resolve(DASHBOARD_SOURCE_DIR, cleanUrl);
 
-  // Basic security check: prevent directory traversal
-  if (!filePath.startsWith(DASHBOARD_SOURCE_DIR)) {
+  // 防止目录穿越及相同前缀目录绕过（例如 src-private）。
+  if (
+    filePath !== DASHBOARD_SOURCE_DIR
+    && !filePath.startsWith(`${DASHBOARD_SOURCE_DIR}${path.sep}`)
+  ) {
     res.writeHead(403);
     res.end("Forbidden");
     return;
