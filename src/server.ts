@@ -2,14 +2,14 @@ import fs from "node:fs";
 import path from "node:path";
 import http from "node:http";
 import crypto from "node:crypto";
+import { calculateAccountReturns } from "yangjian/calculation/account-returns";
+import { calculateMarketReturns } from "yangjian/calculation/market-returns";
 import {
-  calculateAccountReturns,
-  calculateMarketReturns,
   DEFAULT_HOLIDAY_CALENDAR_DIR,
   findTradingDateOnOrBefore,
-  parseTradesMarkdown,
-  type MarketBenchmarkReturn,
-} from "yangjian/calculation";
+} from "yangjian/calculation/trading-calendar";
+import { parseTradeMarkdownSections } from "yangjian/calculation/trade-markdown";
+import type { MarketBenchmarkReturn } from "yangjian/calculation/types";
 
 const DASHBOARD_SOURCE_DIR = path.join(__dirname, "../../src");
 const DASHBOARD_CONFIG_PATH = path.join(DASHBOARD_SOURCE_DIR, "config.json");
@@ -198,6 +198,21 @@ function formatSessionTime(value: unknown): string {
   return raw;
 }
 
+function parseDashboardTradesMarkdown(content: string) {
+  return parseTradeMarkdownSections(content).flatMap((trade) => {
+    if (trade.action !== "buy" && trade.action !== "sell") return [];
+    if (trade.price === null) return [];
+
+    return [{
+      tradeNo: trade.tradeNo,
+      action: trade.action === "buy" ? "买入" as const : "卖出" as const,
+      symbol: trade.symbol,
+      name: trade.name,
+      tradePrice: trade.price,
+    }];
+  });
+}
+
 // Parse trades from trades/*.md files for a given week
 function parseTradesForWeek(yangjianRoot: string, weekName: string): TradeRecord[] {
   const tradesDir = path.join(yangjianRoot, "trades");
@@ -225,7 +240,7 @@ function parseTradesForWeek(yangjianRoot: string, weekName: string): TradeRecord
 
     try {
       const content = fs.readFileSync(tradesFilePath, "utf8");
-      const parsedTrades = parseTradesMarkdown(content);
+      const parsedTrades = parseDashboardTradesMarkdown(content);
       
       for (const trade of parsedTrades) {
         trades.push({
@@ -632,9 +647,9 @@ function updateFingerprintWithFile(
     return;
   }
 
-  const stat = fs.statSync(filePath, { bigint: true });
+  const stat = fs.statSync(filePath);
   hash.update(
-    `file:${publicLabel}:${stat.size.toString()}:${stat.mtimeNs.toString()}\0`,
+    `file:${publicLabel}:${stat.size}:${stat.mtimeMs}:${stat.ctimeMs}\0`,
   );
 }
 
@@ -655,7 +670,7 @@ function updateFingerprintWithTree(
   const visit = (currentDir: string, relativeDir: string): void => {
     const entries = fs
       .readdirSync(currentDir, { withFileTypes: true })
-      .sort((a, b) => a.name.localeCompare(b.name));
+      .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
 
     for (const entry of entries) {
       const absolutePath = path.join(currentDir, entry.name);
@@ -669,17 +684,17 @@ function updateFingerprintWithTree(
       }
 
       if (entry.isFile()) {
-        const stat = fs.statSync(absolutePath, { bigint: true });
+        const stat = fs.statSync(absolutePath);
         hash.update(
-          `file:${publicLabel}/${relativePath}:${stat.size.toString()}:${stat.mtimeNs.toString()}\0`,
+          `file:${publicLabel}/${relativePath}:${stat.size}:${stat.mtimeMs}:${stat.ctimeMs}\0`,
         );
         continue;
       }
 
       // 数据目录不应依赖符号链接；仅记录链接自身元数据，避免遍历到项目外部。
-      const stat = fs.lstatSync(absolutePath, { bigint: true });
+      const stat = fs.lstatSync(absolutePath);
       hash.update(
-        `other:${publicLabel}/${relativePath}:${stat.size.toString()}:${stat.mtimeNs.toString()}\0`,
+        `other:${publicLabel}/${relativePath}:${stat.size}:${stat.mtimeMs}:${stat.ctimeMs}\0`,
       );
     }
   };
